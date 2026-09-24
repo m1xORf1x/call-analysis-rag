@@ -11,6 +11,7 @@
     "pipeline": "vite-node scripts/pipeline.ts",
     "check-api": "vite-node scripts/checkCallsApi.ts",
     "check-stt": "vite-node scripts/checkVoicekit.ts",
+    "check-llm": "vite-node scripts/checkBothub.ts",
     "ingest": "vite-node scripts/ingest.ts"
   },
   "dependencies": {
