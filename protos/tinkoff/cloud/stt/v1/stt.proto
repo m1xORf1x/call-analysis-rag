@@ -1,0 +1,177 @@
+// Source: https://github.com/Tinkoff/voicekit-examples/blob/master/apis/tinkoff/cloud/stt/v1/stt.proto
+syntax = "proto3";
+
+package tinkoff.cloud.stt.v1;
+option go_package = "github.com/Tinkoff/voicekit-examples/golang/pkg/tinkoff/cloud/stt/v1";
+option objc_class_prefix = 'TVKSR';
+
+import "google/protobuf/duration.proto";
+import "google/api/annotations.proto";
+import "tinkoff/cloud/longrunning/v1/longrunning.proto";
+
+service SpeechToText {
+  rpc Recognize(RecognizeRequest) returns (RecognizeResponse) {
+    option (google.api.http) = {
+      post: "/v1/stt:recognize"
+      body: "*"
+    };
+  }
+  rpc StreamingRecognize(stream StreamingRecognizeRequest)
+      returns (stream StreamingRecognizeResponse);
+  rpc LongRunningRecognize(LongRunningRecognizeRequest) returns (longrunning.v1.Operation) {
+    option (google.api.http) = {
+      post: "/v1/stt:longrunningrecognize"
+      body: "*"
+    };
+  }
+  rpc StreamingUnaryRecognize(stream StreamingUnaryRecognizeRequest) returns (RecognizeResponse) {
+    option (google.api.http) = {
+      post: "/v1/stt:streaming_unary_recognize";
+      body: "*";
+    };
+  }
+}
+
+enum AudioEncoding {
+  ENCODING_UNSPECIFIED = 0;
+  LINEAR16 = 1;
+  MULAW = 3;
+  ALAW = 8;
+  RAW_OPUS = 11;
+  MPEG_AUDIO = 12;
+  ADTS_AAC = 13;
+  RAW_AAC_LC = 14;
+  RAW_ER_AAC_LD = 15;
+}
+
+message RecognitionAudio {
+  oneof audio_source {
+    bytes content = 1;
+    string uri = 2;
+  }
+}
+
+message SpeechContextPhrase {
+  string text = 1;
+  float score = 2;
+}
+
+message SpeechContext {
+  reserved 1;
+  reserved 2;
+  repeated SpeechContextPhrase phrases = 3;
+  string speech_context_dictionary_id = 4;
+}
+
+message WordInfo {
+  google.protobuf.Duration start_time = 1;
+  google.protobuf.Duration end_time = 2;
+  string word = 3;
+  float confidence = 4;
+}
+
+message VoiceActivityDetectionConfig {
+  float min_speech_duration = 1;
+  float max_speech_duration = 2;
+  float silence_duration_threshold = 3;
+  float silence_prob_threshold = 4;
+  float aggressiveness = 5;
+  float silence_max = 6;
+  float silence_min = 7;
+}
+
+message RecognitionConfig {
+  AudioEncoding encoding = 1;
+  uint32 sample_rate_hertz = 2;
+  string language_code = 3;
+  uint32 max_alternatives = 4;
+  bool profanity_filter = 5;
+  repeated SpeechContext speech_contexts = 6;
+  bool enable_automatic_punctuation = 8;
+  string model = 10;
+  uint32 num_channels = 12;
+  oneof vad {
+    bool do_not_perform_vad = 13;
+    VoiceActivityDetectionConfig vad_config = 14;
+  }
+  bool enable_denormalization = 16;
+  bool enable_sentiment_analysis = 17;
+  bool enable_gender_identification = 18;
+}
+
+message RecognizeRequest {
+  RecognitionConfig config = 1;
+  RecognitionAudio audio = 2;
+}
+
+message SpeechRecognitionAlternative {
+  string transcript = 1;
+  float confidence = 2;
+  repeated WordInfo words = 3;
+}
+
+message SpeechSentimentAnalysisResult {
+  float negative_prob_audio = 1;
+  float negative_prob_audio_text = 2;
+}
+
+message SpeechGenderIdentificationResult {
+  float male_proba = 1;
+  float female_proba = 2;
+}
+
+message SpeechRecognitionResult {
+  repeated SpeechRecognitionAlternative alternatives = 1;
+  int32 channel = 2;
+  google.protobuf.Duration start_time = 3;
+  google.protobuf.Duration end_time = 4;
+  SpeechSentimentAnalysisResult sentiment_analysis_result = 5;
+  SpeechGenderIdentificationResult gender_identification_result = 6;
+}
+
+message RecognizeResponse {
+  repeated SpeechRecognitionResult results = 1;
+}
+
+message InterimResultsConfig {
+  bool enable_interim_results = 1;
+  float interval = 2;
+}
+
+message LongRunningRecognizeRequest {
+  RecognitionConfig config = 1;
+  RecognitionAudio audio = 2;
+  string group = 3;
+}
+
+message StreamingRecognitionConfig {
+  RecognitionConfig config = 1;
+  bool single_utterance = 2;
+  InterimResultsConfig interim_results_config = 3;
+}
+
+message StreamingRecognizeRequest {
+  oneof streaming_request {
+    StreamingRecognitionConfig streaming_config = 1;
+    bytes audio_content = 2;
+  }
+}
+
+message StreamingRecognitionResult {
+  SpeechRecognitionResult recognition_result = 1;
+  bool is_final = 2;
+  float stability = 3;
+}
+
+message StreamingRecognizeResponse {
+  reserved 1;
+  repeated StreamingRecognitionResult results = 2;
+  reserved 3;
+}
+
+message StreamingUnaryRecognizeRequest {
+  oneof streaming_unary_request {
+    RecognitionConfig config = 1;
+    bytes audio_content = 2;
+  }
+}

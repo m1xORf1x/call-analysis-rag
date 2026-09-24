@@ -10,9 +10,10 @@ import 'dotenv/config'
  * Реализованные шаги:
  *   1. fetchCalls    ✅ — GET /v1/calls с валидацией ответа
  *   2. downloadAudio ✅ — GET /v1/calls/{id}/audio, redirect, Uint8Array
+ *   3. transcribe    ✅ — T-Bank VoiceKit gRPC Recognize
  *
  * Заглушки (ждут ключей и следующих этапов):
- *   3. transcribe    🔲 — STT
+ *   (STT реализован)
  *   4. analyse       🔲 — LLM
  *   5. saveResult    🔲 — SQLite persistence
  *
@@ -25,12 +26,12 @@ import 'dotenv/config'
 
 import type { CallRecord, CallAnalysis } from '../types/index.ts'
 import { fetchCalls, downloadAudio } from '../server/utils/callsApi'
+import { transcribeAudio } from '../server/utils/voicekit'
 
-// ─── Шаг 3: Транскрибировать аудио ─────────────────────────────────────────
+// ─── Шаг 3: Транскрибировать аудио (реализовано) ───────────────────────────
 
-async function transcribe(_audio: Uint8Array, callId: string): Promise<string> {
-  // TODO: реализовать через STT-провайдер (STT_API_KEY)
-  throw new Error(`transcribe(${callId}): не реализовано — ожидает STT-ключ`)
+async function transcribe(audio: Uint8Array, callId: string): Promise<string> {
+  return transcribeAudio(audio, callId)
 }
 
 // ─── Шаг 4: Анализ транскрипта через LLM ───────────────────────────────────

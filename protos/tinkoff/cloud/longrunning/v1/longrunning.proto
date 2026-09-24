@@ -1,0 +1,83 @@
+// Source: https://github.com/Tinkoff/voicekit-examples/blob/master/apis/tinkoff/cloud/longrunning/v1/longrunning.proto
+syntax = "proto3";
+
+package tinkoff.cloud.longrunning.v1;
+option go_package = "github.com/Tinkoff/voicekit-examples/golang/pkg/tinkoff/cloud/longrunning/v1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+import "google/rpc/status.proto";
+
+service Operations {
+  rpc GetOperation(GetOperationRequest) returns (Operation) {
+    option (google.api.http) = { get: "/v1/operations/{id}" };
+  }
+  rpc WaitOperation(WaitOperationRequest) returns (Operation);
+  rpc ListOperations(ListOperationsRequest) returns (ListOperationsResponse) {
+    option (google.api.http) = { get: "/v1/operations" };
+  }
+  rpc WatchOperations(WatchOperationsRequest) returns (stream WatchOperationsResponse);
+  rpc DeleteOperation(DeleteOperationRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = { delete: "/v1/operations/{filter.exact_id}" };
+  }
+  rpc CancelOperation(CancelOperationRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/v1/operations/{filter.exact_id}:cancel"
+      body: "*"
+    };
+  }
+}
+
+enum OperationState {
+  ENQUEUED = 0;
+  PROCESSING = 1;
+  DONE = 2;
+  FAILED = 3;
+}
+
+message Operation {
+  string id = 1;
+  string group = 2;
+  google.protobuf.Any metadata = 3;
+  OperationState state = 4;
+  oneof result {
+    google.rpc.Status error = 5;
+    google.protobuf.Any response = 6;
+  }
+  string x_client_request_id = 7;
+}
+
+message OperationFilter {
+  oneof service_id {
+    string exact_service_id = 1;
+    google.protobuf.Empty any_service_id = 2;
+  }
+  oneof id {
+    string exact_id = 3;
+    google.protobuf.Empty any_id = 4;
+  }
+  oneof group {
+    string exact_group = 5;
+    google.protobuf.Empty any_group = 6;
+  }
+  repeated OperationState state = 7;
+}
+
+message GetOperationRequest { string id = 1; }
+message WaitOperationRequest { string id = 1; google.protobuf.Duration timeout = 2; }
+message ListOperationsRequest { OperationFilter filter = 1; int32 page_size = 2; string page_token = 3; }
+message ListOperationsResponse { repeated Operation operations = 1; string next_page_token = 2; }
+message DeleteOperationRequest { OperationFilter filter = 1; }
+message CancelOperationRequest { OperationFilter filter = 1; }
+message WatchOperationsRequest { OperationFilter filter = 1; bool listen_for_updates = 2; }
+message OperationsInitialState { repeated Operation operations = 1; }
+message OperationsUpdate { repeated Operation operations = 1; }
+message WatchOperationsResponse {
+  oneof operations {
+    OperationsInitialState initial_state = 1;
+    google.protobuf.Empty init_finished = 2;
+    OperationsUpdate update = 3;
+  }
+}

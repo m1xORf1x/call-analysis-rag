@@ -10,9 +10,12 @@
     "postinstall": "nuxt prepare",
     "pipeline": "vite-node scripts/pipeline.ts",
     "check-api": "vite-node scripts/checkCallsApi.ts",
+    "check-stt": "vite-node scripts/checkVoicekit.ts",
     "ingest": "vite-node scripts/ingest.ts"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.8.1",
     "nuxt": "^3.21.11",
     "vue": "^3.5.40",
     "vue-router": "^5.2.0"
