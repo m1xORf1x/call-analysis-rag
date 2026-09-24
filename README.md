@@ -1,4 +1,4 @@
-# Bestseller AI — Junior Test
+# Call Analysis RAG
 
 > **Задеплоенное приложение:** _[ссылка появится после деплоя]_
 
