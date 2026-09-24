@@ -1,144 +1,136 @@
+/// <reference types="node" />
+// Загружаем .env при локальном запуске; не перезаписывает переменные хостинга
+import 'dotenv/config'
+
 /**
  * scripts/pipeline.ts
  *
  * Часть 1: Пайплайн обработки звонков
  *
- * Цепочка шагов (будет реализована после получения ключей и API):
- *   1. fetchCalls      — GET {CALLS_API_BASE_URL}/v1/calls → список звонков
- *   2. downloadAudio   — GET {CALLS_API_BASE_URL}/v1/calls/{id}/audio → файл
- *   3. transcribe      — отправка аудио в STT → сырой транскрипт
- *   4. analyse         — отправка транскрипта в LLM → CallAnalysis JSON
- *   5. saveResult      — запись в хранилище (call_id, transcript, analysis, status)
+ * Реализованные шаги:
+ *   1. fetchCalls    ✅ — GET /v1/calls с валидацией ответа
+ *   2. downloadAudio ✅ — GET /v1/calls/{id}/audio, redirect, Uint8Array
  *
- * Кэш: повторный запуск по тем же call_id не запускает STT/LLM заново.
- * Устойчивость: ошибка на любом звонке помечает его статусом 'error',
- *               пайплайн продолжает обработку остальных.
+ * Заглушки (ждут ключей и следующих этапов):
+ *   3. transcribe    🔲 — STT
+ *   4. analyse       🔲 — LLM
+ *   5. saveResult    🔲 — SQLite persistence
  *
- * Запуск: npm run pipeline
+ * Кэш: isAlreadyProcessed() — заглушка, всегда false до реализации хранилища.
+ * Устойчивость: ошибка одного звонка не останавливает обработку остальных.
+ *
+ * Запуск полного пайплайна: npm run pipeline
+ * Быстрая проверка только API:  npm run check-api
  */
 
-import type { Call, CallRecord, CallAnalysis } from '../types/index.ts'
+import type { CallRecord, CallAnalysis } from '../types/index.ts'
+import { fetchCalls, downloadAudio } from '../server/utils/callsApi'
 
-// ─── Шаг 1: Получить список звонков из API ───────────────────────────────────
+// ─── Шаг 3: Транскрибировать аудио ─────────────────────────────────────────
 
-async function fetchCalls(): Promise<Call[]> {
-  // TODO: реализовать после получения CALLS_API_BASE_URL и CALLS_API_TOKEN
-  // const baseUrl = process.env.CALLS_API_BASE_URL
-  // const token   = process.env.CALLS_API_TOKEN
-  // GET {baseUrl}/v1/calls
-  // Authorization: Bearer {token}
-  throw new Error('fetchCalls: не реализовано')
+async function transcribe(_audio: Uint8Array, callId: string): Promise<string> {
+  // TODO: реализовать через STT-провайдер (STT_API_KEY)
+  throw new Error(`transcribe(${callId}): не реализовано — ожидает STT-ключ`)
 }
 
-// ─── Шаг 2: Скачать аудиофайл ────────────────────────────────────────────────
+// ─── Шаг 4: Анализ транскрипта через LLM ───────────────────────────────────
 
-async function downloadAudio(call: Call): Promise<Uint8Array> {
-  // TODO: реализовать
-  // GET {BASE}/v1/calls/{id}/audio
-  // Обработать 302 redirect на файл
-  // Если 4xx/5xx — бросить ошибку (звонок будет помечен 'error')
-  throw new Error(`downloadAudio(${call.id}): не реализовано`)
+async function analyse(_transcript: string, callId: string): Promise<CallAnalysis> {
+  // TODO: реализовать через LLM (LLM_API_KEY, LLM_MODEL)
+  // Роль: аналитик звонков отдела продаж недвижимости
+  // Ответ — только валидный JSON по схеме CallAnalysis, без Markdown
+  throw new Error(`analyse(${callId}): не реализовано — ожидает LLM-ключ`)
 }
 
-// ─── Шаг 3: Транскрибировать аудио ───────────────────────────────────────────
-
-async function transcribe(audio: Uint8Array, call: Call): Promise<string> {
-  // TODO: реализовать через STT-провайдер (ключ из STT_API_KEY)
-  // Вернуть сырой текст транскрипта
-  throw new Error(`transcribe(${call.id}): не реализовано`)
-}
-
-// ─── Шаг 4: Анализ транскрипта через LLM ─────────────────────────────────────
-
-async function analyse(transcript: string, callId: string): Promise<CallAnalysis> {
-  // TODO: реализовать через LLM (ключ из LLM_API_KEY, модель из LLM_MODEL)
-  // Роль модели: аналитик звонков отдела продаж недвижимости
-  // Промпт должен требовать только валидный JSON без Markdown
-  // null / [] для пустых полей — допустимо
-  throw new Error(`analyse(${callId}): не реализовано`)
-}
-
-// ─── Шаг 5: Сохранить результат ──────────────────────────────────────────────
+// ─── Шаг 5: Сохранить результат ────────────────────────────────────────────
 
 async function saveResult(record: CallRecord): Promise<void> {
-  // TODO: реализовать запись в SQLite (или другое выбранное хранилище)
+  // TODO: реализовать запись в SQLite
   // Поля: id, filename, duration_sec, status, transcript, analysis, error, created_at, updated_at
-  throw new Error(`saveResult(${record.id}): не реализовано`)
+  throw new Error(`saveResult(${record.id}): не реализовано — ожидает SQLite`)
 }
 
-// ─── Кэш: проверить, обработан ли уже этот звонок ───────────────────────────
+// ─── Кэш: проверить, обработан ли уже этот звонок ──────────────────────────
 
 async function isAlreadyProcessed(_callId: string): Promise<boolean> {
-  // TODO: запрос к хранилищу — вернуть true, если статус === 'analyzed'
-  // Кэш по call_id предотвращает повторный запуск STT/LLM
+  // TODO: запрос к SQLite — вернуть true, если status === 'analyzed'
   return false
 }
 
-// ─── Главная функция ──────────────────────────────────────────────────────────
+// ─── Главная функция ────────────────────────────────────────────────────────
 
 async function runPipeline(): Promise<void> {
-  console.log('▶ Запуск пайплайна звонков...')
+  console.log('▶ Запуск пайплайна звонков...\n')
 
-  // Шаг 1: получить список
-  // TODO: в реализации добавить process.exit(1) при критической ошибке
+  // Шаг 1: получить список (реализовано)
   const calls = await fetchCalls()
   console.log(`  Найдено звонков: ${calls.length}`)
 
+  if (calls.length === 0) {
+    console.log('  Нет звонков для обработки.')
+    return
+  }
+
   // Шаги 2–5: обработать каждый звонок независимо
   for (const call of calls) {
-    console.log(`\n── Звонок ${call.id} (${call.filename}) ──`)
+    console.log(`\n── Звонок ${call.id} (${call.filename}, ${call.duration_sec}s) ──`)
 
-    // Кэш: пропустить уже обработанные
     if (await isAlreadyProcessed(call.id)) {
       console.log('  ⏭ Уже обработан, пропуск')
       continue
     }
 
+    const now = new Date().toISOString()
     const record: CallRecord = {
       ...call,
       status: 'pending',
       transcript: null,
       analysis: null,
       error: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: now,
+      updated_at: now,
     }
 
     try {
-      // Шаг 2: скачать аудио
+      // Шаг 2: скачать аудио (реализовано)
       console.log('  ↓ Скачивание аудио...')
       const audio = await downloadAudio(call)
       record.status = 'downloaded'
+      console.log(`    ${audio.byteLength} байт`)
 
-      // Шаг 3: транскрибировать
+      // Шаг 3: транскрибировать (заглушка)
       console.log('  🎙 Транскрибирование...')
-      record.transcript = await transcribe(audio, call)
+      record.transcript = await transcribe(audio, call.id)
       record.status = 'transcribed'
 
-      // Шаг 4: LLM-анализ
-      console.log('  🤖 Анализ транскрипта...')
+      // Шаг 4: LLM-анализ (заглушка)
+      console.log('  🤖 Анализ...')
       record.analysis = await analyse(record.transcript, call.id)
       record.status = 'analyzed'
 
-      console.log(`  ✓ Готово (статус: ${record.status})`)
+      console.log(`  ✓ Готово`)
     } catch (err) {
-      // Ошибка не останавливает пайплайн — помечаем звонок и идём дальше
       record.status = 'error'
       record.error = err instanceof Error ? err.message : String(err)
-      console.error(`  ✗ Ошибка: ${record.error}`)
+      console.error(`  ✗ ${record.error}`)
     } finally {
       record.updated_at = new Date().toISOString()
     }
 
-    // Шаг 5: сохранить (включая ошибочные)
+    // Шаг 5: сохранить (заглушка)
     try {
       await saveResult(record)
     } catch (saveErr) {
-      console.error(`  ✗ Не удалось сохранить результат: ${saveErr}`)
+      // Не прерываем пайплайн — SQLite пока не реализован
+      const msg = saveErr instanceof Error ? saveErr.message : String(saveErr)
+      console.log(`  (хранилище): ${msg}`)
     }
   }
 
   console.log('\n✓ Пайплайн завершён')
 }
 
-runPipeline()
+runPipeline().catch(err => {
+  console.error('✗ Критическая ошибка пайплайна:', err instanceof Error ? err.message : err)
+  process.exit(1)
+})

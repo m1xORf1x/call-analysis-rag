@@ -9,6 +9,7 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "pipeline": "vite-node scripts/pipeline.ts",
+    "check-api": "vite-node scripts/checkCallsApi.ts",
     "ingest": "vite-node scripts/ingest.ts"
   },
   "dependencies": {
@@ -17,6 +18,8 @@
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.2",
+    "dotenv": "^18.0.3",
     "typescript": "~5.8",
     "vue-tsc": "^3.3.11"
   }
