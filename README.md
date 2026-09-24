@@ -1,75 +1,124 @@
-# Nuxt Minimal Starter
+# Bestseller AI — Junior Test
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+> **Задеплоенное приложение:** _[ссылка появится после деплоя]_
 
-## Setup
+Тестовое задание: пайплайн аудио → LLM-анализ + RAG по документам + UI из Figma.  
+Один репозиторий, три части, один экран.
 
-Make sure to install dependencies:
+---
+
+## Части проекта
+
+| Часть | Что делает | Команда |
+|-------|-----------|---------|
+| **1. Звонки** | Забирает аудио по API, транскрибирует (STT), анализирует (LLM), сохраняет результат | `npm run pipeline` |
+| **2. RAG** | Парсит PDF/Markdown, строит индекс эмбеддингов, отвечает на вопросы с цитатами | `npm run ingest` |
+| **3. UI** | Единственный экран: список звонков, карточка анализа, блок «Спросить базу» | `npm run dev` |
+
+---
+
+## Локальный запуск
+
+### 1. Установить зависимости
 
 ```bash
-# npm
 npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
 ```
 
-## Development Server
-
-Start the development server on `http://localhost:3000`:
+### 2. Настроить переменные окружения
 
 ```bash
-# npm
+cp .env.example .env
+# Заполнить .env реальными ключами (см. раздел «Переменные окружения»)
+```
+
+### 3. Запустить пайплайн звонков (Часть 1)
+
+> Требует: `CALLS_API_BASE_URL`, `CALLS_API_TOKEN`, `STT_API_KEY`, `LLM_API_KEY`
+
+```bash
+npm run pipeline
+```
+
+### 4. Наполнить базу знаний (Часть 2)
+
+> Положите PDF/Markdown документы в `data/docs/`  
+> Требует: `EMBEDDINGS_API_KEY`, `LLM_API_KEY`
+
+```bash
+npm run ingest
+```
+
+### 5. Запустить UI
+
+```bash
 npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
+# http://localhost:3000
 ```
 
-## Production
+---
 
-Build the application for production:
+## Переменные окружения
 
-```bash
-# npm
-npm run build
+Все переменные описаны в `.env.example`. Ни один реальный ключ не попадает в Git.
 
-# pnpm
-pnpm build
+| Переменная | Описание |
+|------------|----------|
+| `CALLS_API_BASE_URL` | Базовый URL сервера с записями звонков (предоставляет заказчик) |
+| `CALLS_API_TOKEN` | Bearer-токен для Calls API (предоставляет заказчик) |
+| `STT_API_KEY` | Ключ провайдера Speech-to-Text |
+| `LLM_API_KEY` | Ключ провайдера LLM (анализ + RAG) |
+| `LLM_MODEL` | Модель LLM (например, `gpt-4o`) |
+| `EMBEDDINGS_API_KEY` | Ключ для получения эмбеддингов (может совпадать с `LLM_API_KEY`) |
 
-# yarn
-yarn build
+На хостинге (Vercel / Render / Railway) переменные прописываются в настройках окружения — **не в файлах**.
 
-# bun
-bun run build
+---
+
+## Структура проекта
+
+```
+├── types/index.ts        # TypeScript-типы: Call, CallAnalysis, Chunk, AskRequest…
+├── scripts/
+│   ├── pipeline.ts       # Часть 1: fetch → STT → LLM → save
+│   └── ingest.ts         # Часть 2: parse → chunk → embed → store
+├── server/
+│   └── api/              # Nitro API-эндпоинты
+├── pages/index.vue       # Единственный экран (Часть 3)
+├── components/           # Vue-компоненты
+├── data/                 # Локальные данные (в .gitignore)
+│   ├── docs/             # Документы ЖК (PDF/Markdown)
+│   ├── vectors/          # Векторное хранилище
+│   └── calls.db          # SQLite
+└── .env.example          # Шаблон переменных без секретов
 ```
 
-Locally preview production build:
+---
 
-```bash
-# npm
-npm run preview
+## Figma MCP
 
-# pnpm
-pnpm preview
+> _Раздел будет заполнен на этапе верстки экрана._
 
-# yarn
-yarn preview
+Экран верстался по макету Figma через Figma MCP в Cursor.
 
-# bun
-bun run preview
-```
+| Вызов MCP | node-id | Что получено |
+|-----------|---------|-------------|
+| `get_metadata` | _[будет заполнено]_ | Список фреймов, размеры |
+| `get_design_context` | _[будет заполнено]_ | Токены цветов, шрифтов, отступов |
+| `get_variable_defs` | _[будет заполнено]_ | CSS-переменные и токены дизайн-системы |
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+---
+
+## Деплой
+
+> _Инструкции появятся после выбора хостинга._
+
+Планируемый хостинг: Vercel / Render / Railway (бесплатный tier).
+
+---
+
+## Статус реализации
+
+- [ ] Часть 1: Пайплайн звонков (ожидает ключей API)
+- [ ] Часть 2: RAG по документам (ожидает документов и ключей)
+- [ ] Часть 3: UI из Figma (ожидает ссылки на макет)

@@ -7,11 +7,17 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "pipeline": "vite-node scripts/pipeline.ts",
+    "ingest": "vite-node scripts/ingest.ts"
   },
   "dependencies": {
     "nuxt": "^3.21.11",
     "vue": "^3.5.40",
     "vue-router": "^5.2.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.8",
+    "vue-tsc": "^3.3.11"
   }
 }
