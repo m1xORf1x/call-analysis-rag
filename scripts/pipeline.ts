@@ -12,22 +12,22 @@ import 'dotenv/config'
  *   2. downloadAudio ✅ — GET /v1/calls/{id}/audio, redirect, Uint8Array
  *   3. transcribe    ✅ — STT через активный провайдер (STT_PROVIDER; по умолчанию Soniox,
  *                          см. server/utils/sttProvider.ts)
+ *   4. analyse       ✅ — BotHub LLM (server/utils/bothub.ts)
+ *   5. SQLite        ✅ — persistence + защита от повторной обработки (server/utils/db.ts)
  *
- * Заглушки (ждут ключей и следующих этапов):
- *   (STT реализован)
- *   4. analyse       🔲 — LLM
- *   5. saveResult    🔲 — SQLite persistence
- *
- * Кэш: isAlreadyProcessed() — заглушка, всегда false до реализации хранилища.
- * Устойчивость: ошибка одного звонка не останавливает обработку остальных.
+ * Кэш: перед обработкой звонок проверяется в SQLite по call_id.
+ *      Если status === "completed" — звонок пропускается (STT и LLM не запускаются повторно).
+ * Устойчивость: ошибка одного звонка не останавливает обработку остальных
+ *               (сохраняется как status "failed" + error, пайплайн идёт дальше).
  *
  * Запуск полного пайплайна: npm run pipeline
  * Быстрая проверка только API:  npm run check-api
  */
 
-import type { CallRecord, CallAnalysis } from '../types/index.ts'
 import { fetchCalls, downloadAudio } from '../server/utils/callsApi'
 import { getSttProvider } from '../server/utils/sttProvider'
+import { analyseTranscript } from '../server/utils/bothub'
+import { getCall, createCall, updateCallStatus } from '../server/utils/db'
 
 // ─── Шаг 3: Транскрибировать аудио (реализовано) ───────────────────────────
 
@@ -41,28 +41,15 @@ async function transcribe(audio: Uint8Array, callId: string, contentType: string
   }
 }
 
-// ─── Шаг 4: Анализ транскрипта через LLM ───────────────────────────────────
+// ─── Шаг 4: Анализ транскрипта через LLM (реализовано) ─────────────────────
 
-async function analyse(_transcript: string, callId: string): Promise<CallAnalysis> {
-  // TODO: реализовать через LLM (LLM_API_KEY, LLM_MODEL)
-  // Роль: аналитик звонков отдела продаж недвижимости
-  // Ответ — только валидный JSON по схеме CallAnalysis, без Markdown
-  throw new Error(`analyse(${callId}): не реализовано — ожидает LLM-ключ`)
-}
-
-// ─── Шаг 5: Сохранить результат ────────────────────────────────────────────
-
-async function saveResult(record: CallRecord): Promise<void> {
-  // TODO: реализовать запись в SQLite
-  // Поля: id, filename, duration_sec, status, transcript, analysis, error, created_at, updated_at
-  throw new Error(`saveResult(${record.id}): не реализовано — ожидает SQLite`)
-}
-
-// ─── Кэш: проверить, обработан ли уже этот звонок ──────────────────────────
-
-async function isAlreadyProcessed(_callId: string): Promise<boolean> {
-  // TODO: запрос к SQLite — вернуть true, если status === 'analyzed'
-  return false
+async function analyse(transcript: string, callId: string) {
+  try {
+    return await analyseTranscript(transcript)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`Call ${callId}: LLM analysis failed — ${msg}`)
+  }
 }
 
 // ─── Главная функция ────────────────────────────────────────────────────────
@@ -79,59 +66,42 @@ async function runPipeline(): Promise<void> {
     return
   }
 
-  // Шаги 2–5: обработать каждый звонок независимо
+  // Шаги 2–4: обработать каждый звонок независимо; результат — в SQLite
   for (const call of calls) {
     console.log(`\n── Звонок ${call.id} (${call.filename}, ${call.duration_sec}s) ──`)
 
-    if (await isAlreadyProcessed(call.id)) {
-      console.log('  ⏭ Уже обработан, пропуск')
+    // Шаг 0: проверка по SQLite — пропустить уже успешно обработанные звонки
+    const existing = getCall(call.id)
+    if (existing?.status === 'completed') {
+      console.log('  ⏭ Уже обработан (status completed), пропуск')
       continue
     }
 
-    const now = new Date().toISOString()
-    const record: CallRecord = {
-      ...call,
-      status: 'pending',
-      transcript: null,
-      analysis: null,
-      error: null,
-      created_at: now,
-      updated_at: now,
-    }
+    // Создаёт запись со статусом "pending", если её ещё нет (идемпотентно)
+    createCall(call.id)
 
     try {
       // Шаг 2: скачать аудио (реализовано)
       console.log('  ↓ Скачивание аудио...')
       const audio = await downloadAudio(call)
-      record.status = 'downloaded'
       console.log(`    ${audio.byteLength} байт`)
 
       // Шаг 3: транскрибировать (реализовано)
       console.log('  🎙 Транскрибирование...')
-      record.transcript = await transcribe(audio, call.id, call.content_type)
-      record.status = 'transcribed'
+      const transcript = await transcribe(audio, call.id, call.content_type)
+      updateCallStatus(call.id, { status: 'transcribed', transcript })
+      console.log('    OK')
 
-      // Шаг 4: LLM-анализ (заглушка)
+      // Шаг 4: LLM-анализ (реализовано)
       console.log('  🤖 Анализ...')
-      record.analysis = await analyse(record.transcript, call.id)
-      record.status = 'analyzed'
+      const analysis = await analyse(transcript, call.id)
+      updateCallStatus(call.id, { status: 'completed', analysisJson: JSON.stringify(analysis) })
 
       console.log(`  ✓ Готово`)
     } catch (err) {
-      record.status = 'error'
-      record.error = err instanceof Error ? err.message : String(err)
-      console.error(`  ✗ ${record.error}`)
-    } finally {
-      record.updated_at = new Date().toISOString()
-    }
-
-    // Шаг 5: сохранить (заглушка)
-    try {
-      await saveResult(record)
-    } catch (saveErr) {
-      // Не прерываем пайплайн — SQLite пока не реализован
-      const msg = saveErr instanceof Error ? saveErr.message : String(saveErr)
-      console.log(`  (хранилище): ${msg}`)
+      const message = err instanceof Error ? err.message : String(err)
+      updateCallStatus(call.id, { status: 'failed', error: message })
+      console.error(`  ✗ ${message}`)
     }
   }
 
