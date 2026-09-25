@@ -24,8 +24,8 @@ logs
 !.env.example
 
 # ─── Данные проекта (не коммитить) ──────────────────────────────────────────
-# SQLite-база звонков
-data/calls.db
+# SQLite-базы звонков
+data/*.db
 
 # Векторное хранилище (FAISS/Qdrant/Chroma локальные файлы)
 data/vectors/
