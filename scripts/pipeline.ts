@@ -15,8 +15,12 @@ import 'dotenv/config'
  *   4. analyse       ✅ — BotHub LLM (server/utils/bothub.ts)
  *   5. SQLite        ✅ — persistence + защита от повторной обработки (server/utils/db.ts)
  *
- * Кэш: перед обработкой звонок проверяется в SQLite по call_id.
- *      Если status === "completed" — звонок пропускается (STT и LLM не запускаются повторно).
+ * Кэш / возобновление после частичного успеха (по call_id в SQLite):
+ *   - analysis_json уже есть  → звонок полностью пропускается (ни STT, ни LLM не вызываются);
+ *   - transcript уже есть, analysis_json нет → STT пропускается, вызывается только LLM
+ *     (типичный случай: STT прошёл, LLM упал на предыдущем запуске);
+ *   - ни того, ни другого нет → полный проход: скачать → STT → LLM.
+ * Успешное завершение шага очищает error (error = NULL); "failed" сохраняет актуальную ошибку.
  * Устойчивость: ошибка одного звонка не останавливает обработку остальных
  *               (сохраняется как status "failed" + error, пайплайн идёт дальше).
  *
@@ -70,10 +74,10 @@ async function runPipeline(): Promise<void> {
   for (const call of calls) {
     console.log(`\n── Звонок ${call.id} (${call.filename}, ${call.duration_sec}s) ──`)
 
-    // Шаг 0: проверка по SQLite — пропустить уже успешно обработанные звонки
+    // Шаг 0: проверка по SQLite — пропустить полностью обработанные, возобновить частично обработанные
     const existing = getCall(call.id)
-    if (existing?.status === 'completed') {
-      console.log('  ⏭ Уже обработан (status completed), пропуск')
+    if (existing?.analysis_json) {
+      console.log('  ⏭ Уже проанализирован (analysis сохранён), пропуск')
       continue
     }
 
@@ -81,21 +85,35 @@ async function runPipeline(): Promise<void> {
     createCall(call.id)
 
     try {
-      // Шаг 2: скачать аудио (реализовано)
-      console.log('  ↓ Скачивание аудио...')
-      const audio = await downloadAudio(call)
-      console.log(`    ${audio.byteLength} байт`)
+      let transcript: string
 
-      // Шаг 3: транскрибировать (реализовано)
-      console.log('  🎙 Транскрибирование...')
-      const transcript = await transcribe(audio, call.id, call.content_type)
-      updateCallStatus(call.id, { status: 'transcribed', transcript })
-      console.log('    OK')
+      if (existing?.transcript) {
+        // Транскрипт уже сохранён с предыдущего запуска (например, LLM упал после успешного STT) —
+        // не скачиваем аудио и не вызываем STT повторно.
+        console.log('  ⏭ Транскрипт уже есть, пропуск скачивания и STT')
+        transcript = existing.transcript
+      } else {
+        // Шаг 2: скачать аудио (реализовано)
+        console.log('  ↓ Скачивание аудио...')
+        const audio = await downloadAudio(call)
+        console.log(`    ${audio.byteLength} байт`)
+
+        // Шаг 3: транскрибировать (реализовано)
+        console.log('  🎙 Транскрибирование...')
+        transcript = await transcribe(audio, call.id, call.content_type)
+        // error очищается (null) — предыдущая ошибка (если была) больше не актуальна
+        updateCallStatus(call.id, { status: 'transcribed', transcript, error: null })
+        console.log('    OK')
+      }
 
       // Шаг 4: LLM-анализ (реализовано)
       console.log('  🤖 Анализ...')
       const analysis = await analyse(transcript, call.id)
-      updateCallStatus(call.id, { status: 'completed', analysisJson: JSON.stringify(analysis) })
+      updateCallStatus(call.id, {
+        status: 'completed',
+        analysisJson: JSON.stringify(analysis),
+        error: null, // успешное завершение очищает старую ошибку
+      })
 
       console.log(`  ✓ Готово`)
     } catch (err) {
