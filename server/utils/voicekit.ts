@@ -5,6 +5,9 @@
  * T-Bank VoiceKit STT client.
  * API: https://ai.tbank.ru / gRPC api.tinkoff.ai:443
  *
+ * Статус: резервная/legacy реализация STTProvider. Основной провайдер — Soniox
+ * (см. server/utils/soniox.ts, server/utils/sttProvider.ts).
+ *
  * Авторизация: JWT HS256
  *   - kid  = VOICEKIT_API_KEY
  *   - aud  = "tinkoff.cloud.stt"
@@ -23,6 +26,7 @@ import * as protoLoader from '@grpc/proto-loader'
 import { createHmac, randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { STTProvider } from './sttProvider'
 
 // ─── Пути ─────────────────────────────────────────────────────────────────────
 
@@ -228,4 +232,13 @@ export async function transcribeAudio(audio: Uint8Array, callId: string): Promis
     // Закрываем gRPC-канал после каждого вызова
     client.close()
   }
+}
+
+/**
+ * VoiceKit как реализация общего интерфейса STTProvider.
+ * callId в интерфейсе STTProvider не передаётся — используется placeholder
+ * для сообщений об ошибках (без потери контекста ключей/секретов).
+ */
+export const voicekitProvider: STTProvider = {
+  transcribe: (audio, _contentType) => transcribeAudio(audio, 'voicekit'),
 }

@@ -10,7 +10,8 @@ import 'dotenv/config'
  * Реализованные шаги:
  *   1. fetchCalls    ✅ — GET /v1/calls с валидацией ответа
  *   2. downloadAudio ✅ — GET /v1/calls/{id}/audio, redirect, Uint8Array
- *   3. transcribe    ✅ — T-Bank VoiceKit gRPC Recognize
+ *   3. transcribe    ✅ — STT через активный провайдер (STT_PROVIDER; по умолчанию Soniox,
+ *                          см. server/utils/sttProvider.ts)
  *
  * Заглушки (ждут ключей и следующих этапов):
  *   (STT реализован)
@@ -26,12 +27,18 @@ import 'dotenv/config'
 
 import type { CallRecord, CallAnalysis } from '../types/index.ts'
 import { fetchCalls, downloadAudio } from '../server/utils/callsApi'
-import { transcribeAudio } from '../server/utils/voicekit'
+import { getSttProvider } from '../server/utils/sttProvider'
 
 // ─── Шаг 3: Транскрибировать аудио (реализовано) ───────────────────────────
 
-async function transcribe(audio: Uint8Array, callId: string): Promise<string> {
-  return transcribeAudio(audio, callId)
+async function transcribe(audio: Uint8Array, callId: string, contentType: string): Promise<string> {
+  const provider = getSttProvider()
+  try {
+    return await provider.transcribe(audio, contentType)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(`Call ${callId}: STT failed — ${msg}`)
+  }
 }
 
 // ─── Шаг 4: Анализ транскрипта через LLM ───────────────────────────────────
@@ -99,9 +106,9 @@ async function runPipeline(): Promise<void> {
       record.status = 'downloaded'
       console.log(`    ${audio.byteLength} байт`)
 
-      // Шаг 3: транскрибировать (заглушка)
+      // Шаг 3: транскрибировать (реализовано)
       console.log('  🎙 Транскрибирование...')
-      record.transcript = await transcribe(audio, call.id)
+      record.transcript = await transcribe(audio, call.id, call.content_type)
       record.status = 'transcribed'
 
       // Шаг 4: LLM-анализ (заглушка)

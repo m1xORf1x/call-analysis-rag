@@ -10,8 +10,10 @@
     "postinstall": "nuxt prepare",
     "pipeline": "vite-node scripts/pipeline.ts",
     "check-api": "vite-node scripts/checkCallsApi.ts",
-    "check-stt": "vite-node scripts/checkVoicekit.ts",
+    "check-stt": "vite-node scripts/checkStt.ts",
+    "check-stt-voicekit": "vite-node scripts/checkVoicekit.ts",
     "check-llm": "vite-node scripts/checkBothub.ts",
+    "check-e2e": "vite-node scripts/checkE2E.ts",
     "ingest": "vite-node scripts/ingest.ts"
   },
   "dependencies": {
