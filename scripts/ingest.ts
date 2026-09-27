@@ -1,147 +1,145 @@
+/// <reference types="node" />
+import 'dotenv/config'
 /**
  * scripts/ingest.ts
  *
- * Часть 2: Инжест документов для RAG
+ * Официальный entrypoint полного RAG ingestion pipeline (Часть 2):
  *
- * Цепочка шагов (будет реализована после получения документов и ключей):
- *   1. scanDocs     — найти все PDF и Markdown в data/docs/
- *   2. parseDoc     — извлечь текст из каждого файла
- *   3. chunkDoc     — нарезать текст на чанки (400–800 токенов, overlap 50–100)
- *   4. embedChunks  — получить векторы эмбеддингов для каждого чанка
- *   5. storeChunks  — сохранить чанки + векторы в локальное хранилище
+ *   documents → parse → chunk → embeddings → Qdrant
  *
- * Запускается один раз (или при обновлении документов), не при каждом вопросе.
- * Метаданные чанка: source (имя файла), chunk_index, text.
+ * Порядок шагов важен для надёжности:
+ *   1. Парсинг + чанкинг документов (ragChunk) — локально, без сети.
+ *   2. Получение embeddings для ВСЕХ chunks (ragEmbed) — если сеть/API
+ *      недоступны, Qdrant ещё не тронут.
+ *   3. Только ПОСЛЕ успешных 1–2: recreateCollection() — коллекция
+ *      полностью пересоздаётся (удаляется и создаётся с нуля), чтобы
+ *      исключить stale points от удалённых/изменённых документов.
+ *      Простое полное пересоздание — осознанный выбор для этого
+ *      тестового проекта; production-миграции (aliases, blue/green)
+ *      не реализуются.
+ *   4. ensurePayloadIndexes() — keyword-индексы project/source для фильтрации.
+ *   5. upsertPoints() — запись всех точек.
+ *   6. countPoints() — строгая проверка: count должен быть РОВНО равен
+ *      числу chunks (не ">="), иначе pipeline завершается с ошибкой.
+ *
+ * Идемпотентность: повторный запуск с тем же corpus документов приводит
+ * Qdrant collection в состояние, точно соответствующее текущему corpus —
+ * без остатков от предыдущих запусков.
+ *
+ * Поддерживаемые форматы документов: .pdf .docx .pptx .xlsx .md .markdown
  *
  * Запуск: npm run ingest
- *
- * Переменные окружения (будут подключены при реализации):
- *   DOCS_PATH    — путь к папке с документами (по умолчанию ./data/docs)
- *   VECTORS_PATH — путь к папке векторного хранилища (по умолчанию ./data/vectors)
- *   EMBEDDINGS_API_KEY — ключ провайдера эмбеддингов
  */
 
-import type { Chunk } from '../types/index.ts'
-
-// ─── Конфигурация ─────────────────────────────────────────────────────────────
-// TODO: заменить на process.env.DOCS_PATH и process.env.VECTORS_PATH при реализации
+import { parseAndChunkAll } from '../server/utils/ragChunk'
+import { batchEmbedTexts, EMBED_BATCH_SIZE } from '../server/utils/ragEmbed'
+import { recreateCollection, ensurePayloadIndexes, upsertPoints, countPoints } from '../server/utils/ragStore'
 
 const DOCS_PATH = './data/docs'
-const VECTORS_PATH = './data/vectors'
 
-// Ориентировочный размер чанка и перекрытие (в токенах / символах)
-const CHUNK_SIZE = 600   // ~400–800 токенов
-const CHUNK_OVERLAP = 75 // ~50–100 токенов
+// ─── Утилиты ─────────────────────────────────────────────────────────────────
 
-// ─── Шаг 1: Сканировать папку с документами ──────────────────────────────────
-
-async function scanDocs(docsPath: string): Promise<string[]> {
-  // TODO: реализовать с помощью fs/promises.readdir (рекурсивно)
-  // Вернуть полные пути к файлам с расширениями .pdf и .md
-  throw new Error(`scanDocs(${docsPath}): не реализовано`)
+function step(label: string) {
+  console.log(`\n▶ ${label}`)
 }
 
-// ─── Шаг 2: Парсинг документа в текст ────────────────────────────────────────
+function info(label: string, value: string | number) {
+  console.log(`  ${label.padEnd(22)} ${value}`)
+}
 
-async function parseDoc(filePath: string): Promise<string> {
-  // Определяем расширение файла без node:path
-  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
-  if (ext === 'pdf') {
-    // TODO: реализовать через pdf-parse или аналог
-    // Только текстовый слой, без изображений
-    throw new Error(`parseDoc: парсинг PDF не реализован (${filePath})`)
+async function main(): Promise<void> {
+  console.log('╔══════════════════════════════════════════════════════════════╗')
+  console.log('║   RAG Ingest — documents → chunks → embeddings → Qdrant     ║')
+  console.log('╚══════════════════════════════════════════════════════════════╝')
+
+  // ── 1. Ingestion + chunking (без сети) ─────────────────────────────────────
+  step('Ingestion + chunking...')
+  const chunks = await parseAndChunkAll(DOCS_PATH)
+
+  const sources = new Set(chunks.map(c => c.source))
+  info('Documents:', sources.size)
+  info('Chunks:', chunks.length)
+
+  if (chunks.length === 0) {
+    console.error('\n✗ Нет chunks. Проверьте папку', DOCS_PATH)
+    process.exit(1)
   }
 
-  if (ext === 'md') {
-    // TODO: реализовать чтение Markdown как plain text (или с stripMarkdown)
-    throw new Error(`parseDoc: парсинг Markdown не реализован (${filePath})`)
+  // ── 2. Embeddings — ДО любых изменений в Qdrant ─────────────────────────────
+  step('Embeddings...')
+  const texts = chunks.map(c => c.text)
+  const totalBatches = Math.ceil(texts.length / EMBED_BATCH_SIZE)
+  info('Batch size:', EMBED_BATCH_SIZE)
+  info('Batches total:', totalBatches)
+
+  const embedResult = await batchEmbedTexts(texts, (done, total) => {
+    process.stdout.write(`\r  Progress: ${done}/${total} vectors  `)
+  })
+  process.stdout.write('\n')
+
+  // Верифицируем: число векторов = числу chunks
+  if (embedResult.inputCount !== chunks.length) {
+    throw new Error(
+      `ingest: несовпадение — получено ${embedResult.inputCount} векторов для ${chunks.length} chunks`,
+    )
   }
 
-  throw new Error(`parseDoc: неподдерживаемый формат файла: .${ext}`)
-}
+  info('Model:', embedResult.model)
+  info('Dimensions:', embedResult.dimensions)
+  info('Vectors created:', embedResult.inputCount)
 
-// ─── Шаг 3: Нарезка текста на чанки ──────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Документы, chunks и embeddings проверены. Только теперь можно менять Qdrant —
+  // ошибка на более раннем шаге не уничтожает рабочий индекс раньше времени.
+  // ─────────────────────────────────────────────────────────────────────────────
 
-function chunkText(text: string, source: string): Chunk[] {
-  // TODO: реализовать нарезку с заданными CHUNK_SIZE и CHUNK_OVERLAP
-  // Граница чанка — предпочтительно конец предложения/абзаца
-  // Каждый чанк: { source, chunk_index, text }
-  throw new Error(`chunkText(${source}): не реализовано`)
-}
+  // ── 3. Qdrant — полное пересоздание коллекции ───────────────────────────────
+  step('Recreating Qdrant collection (clean slate)...')
+  await recreateCollection(embedResult.dimensions)
+  info('Collection:', process.env.QDRANT_COLLECTION ?? '?')
+  info('Status:', 'recreated — no stale points possible')
 
-// ─── Шаг 4: Получить эмбеддинги для чанков ───────────────────────────────────
+  // ── 3b. Payload indexes ─────────────────────────────────────────────────────
+  await ensurePayloadIndexes()
+  info('Payload indexes:', 'project, source — OK')
 
-async function embedChunks(chunks: Chunk[]): Promise<Array<{ chunk: Chunk; vector: number[] }>> {
-  // TODO: реализовать через провайдера эмбеддингов (ключ из EMBEDDINGS_API_KEY)
-  // Можно батчевать запросы для экономии API-вызовов
-  throw new Error(`embedChunks([${chunks.length} chunks]): не реализовано`)
-}
+  // ── 4. Qdrant — upsert ──────────────────────────────────────────────────────
+  step('Upsert points...')
+  const { pointsUpserted, collectionName } = await upsertPoints(chunks, embedResult.vectors)
+  info('Points upserted:', pointsUpserted)
 
-// ─── Шаг 5: Сохранить в векторное хранилище ──────────────────────────────────
+  // ── 5. Строгая верификация: count === chunks.length (не >=) ─────────────────
+  step('Verification...')
+  const count = await countPoints()
+  info('Points in Qdrant:', count)
 
-async function storeChunks(
-  items: Array<{ chunk: Chunk; vector: number[] }>,
-  vectorsPath: string,
-): Promise<void> {
-  // TODO: реализовать сохранение в выбранное хранилище (FAISS/Qdrant/Chroma)
-  // Метаданные { source, chunk_index, text } должны быть доступны при поиске
-  throw new Error(`storeChunks(${items.length} items, ${vectorsPath}): не реализовано`)
-}
-
-// ─── Главная функция ──────────────────────────────────────────────────────────
-
-async function runIngest(): Promise<void> {
-  console.log('▶ Запуск инжеста документов...')
-  console.log(`  Папка документов: ${DOCS_PATH}`)
-  console.log(`  Папка векторов:   ${VECTORS_PATH}`)
-
-  // Шаг 1: найти файлы
-  const files = await scanDocs(DOCS_PATH)
-  console.log(`  Найдено файлов: ${files.length}`)
-
-  if (files.length === 0) {
-    console.warn('  ⚠ Нет файлов для инжеста. Положите PDF/Markdown в', DOCS_PATH)
-    return
+  if (count !== chunks.length) {
+    throw new Error(
+      `ingest: несоответствие после ingest — Qdrant содержит ${count} points, ` +
+      `ожидалось ровно ${chunks.length} (= число chunks). ` +
+      `Проверьте upsert/recreateCollection.`,
+    )
   }
 
-  const allItems: Array<{ chunk: Chunk; vector: number[] }> = []
-
-  // Шаги 2–4: обработать каждый файл
-  for (const filePath of files) {
-    console.log(`\n── Файл: ${filePath} ──`)
-
-    try {
-      // Шаг 2: парсинг
-      console.log('  📄 Парсинг...')
-      const text = await parseDoc(filePath)
-
-      // Шаг 3: нарезка
-      const source = filePath.split('/').pop() ?? filePath
-      console.log('  ✂ Нарезка на чанки...')
-      const chunks = chunkText(text, source)
-      console.log(`  Чанков: ${chunks.length}`)
-
-      // Шаг 4: эмбеддинги
-      console.log('  🔢 Эмбеддинги...')
-      const embedded = await embedChunks(chunks)
-      allItems.push(...embedded)
-
-      console.log('  ✓ Готово')
-    } catch (err) {
-      // Ошибка одного файла не останавливает инжест
-      console.error(`  ✗ Ошибка обработки файла: ${err}`)
-    }
-  }
-
-  // Шаг 5: сохранить всё в векторное хранилище
-  if (allItems.length === 0) {
-    throw new Error('Нет чанков для сохранения (все файлы завершились ошибкой?)')
-  }
-
-  console.log(`\n  💾 Сохранение ${allItems.length} чанков в векторное хранилище...`)
-  await storeChunks(allItems, VECTORS_PATH)
-  console.log('✓ Инжест завершён')
+  // ── Итог ────────────────────────────────────────────────────────────────────
+  console.log()
+  console.log('══════════════════════════════════════════════════════════════')
+  console.log('  ИТОГ')
+  console.log('══════════════════════════════════════════════════════════════')
+  info('Documents:', sources.size)
+  info('Chunks:', chunks.length)
+  info('Embeddings created:', embedResult.inputCount)
+  info('Dimensions:', embedResult.dimensions)
+  info('Points upserted:', pointsUpserted)
+  info('Points in Qdrant:', count)
+  info('Collection:', collectionName)
+  console.log()
+  console.log('  ✓ Готово — Qdrant точно соответствует текущему corpus (count === chunks)')
 }
 
-runIngest()
+main().catch(err => {
+  console.error('\n✗ Ошибка:', err instanceof Error ? err.message : String(err))
+  process.exit(1)
+})

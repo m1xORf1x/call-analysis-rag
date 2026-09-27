@@ -12,7 +12,7 @@
 | Часть | Что делает | Команда |
 |-------|-----------|---------|
 | **1. Звонки** | Забирает аудио по API, транскрибирует (STT), анализирует (LLM), сохраняет результат | `npm run pipeline` |
-| **2. RAG** | Парсит PDF/Markdown, строит индекс эмбеддингов, отвечает на вопросы с цитатами | `npm run ingest` |
+| **2. RAG** | Парсит PDF/DOCX/PPTX/XLSX/Markdown, создаёт embeddings и записывает их в Qdrant; отвечает на вопросы с цитатами | `npm run ingest` |
 | **3. UI** | Единственный экран: список звонков, карточка анализа, блок «Спросить базу» | `npm run dev` |
 
 ---
@@ -42,12 +42,18 @@ npm run pipeline
 
 ### 4. Наполнить базу знаний (Часть 2)
 
-> Положите PDF/Markdown документы в `data/docs/`  
-> Требует: `EMBEDDINGS_API_KEY`, `LLM_API_KEY`
+> Положите документы (PDF/DOCX/PPTX/XLSX/Markdown) в `data/docs/<project>/`
+> (`<project>` = `alisa` | `bestseller`)  
+> Требует: `EMBEDDINGS_API_KEY`, `EMBEDDINGS_MODEL`, `QDRANT_URL`, `QDRANT_COLLECTION`
 
 ```bash
 npm run ingest
 ```
+
+`npm run ingest` запускает полный pipeline: парсинг → чанкинг → embeddings →
+запись в Qdrant. Команда идемпотентна — при повторном запуске коллекция
+Qdrant полностью пересоздаётся, поэтому в ней остаются ровно chunks текущего
+состояния `data/docs/` (без «зависших» точек от удалённых/изменённых файлов).
 
 ### 5. Запустить UI
 
@@ -81,15 +87,16 @@ npm run dev
 ├── types/index.ts        # TypeScript-типы: Call, CallAnalysis, Chunk, AskRequest…
 ├── scripts/
 │   ├── pipeline.ts       # Часть 1: fetch → STT → LLM → save
-│   └── ingest.ts         # Часть 2: parse → chunk → embed → store
+│   └── ingest.ts         # Часть 2: parse → chunk → embed → Qdrant (npm run ingest)
 ├── server/
-│   └── api/              # Nitro API-эндпоинты
+│   ├── api/              # Nitro API-эндпоинты (POST /api/ask)
+│   └── utils/            # ragIngest / ragChunk / ragEmbed / ragStore / ragAnswer…
 ├── pages/index.vue       # Единственный экран (Часть 3)
 ├── components/           # Vue-компоненты
 ├── data/                 # Локальные данные (в .gitignore)
-│   ├── docs/             # Документы ЖК (PDF/Markdown)
-│   ├── vectors/          # Векторное хранилище
+│   ├── docs/             # Документы ЖК: PDF, DOCX, PPTX, XLSX, MD/Markdown
 │   └── calls.db          # SQLite
+│                         # (векторы хранятся не локально, а в Qdrant Cloud)
 └── .env.example          # Шаблон переменных без секретов
 ```
 

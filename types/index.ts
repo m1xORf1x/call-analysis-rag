@@ -66,17 +66,62 @@ export interface CallRecord extends Call {
 
 // ─── Часть 2: RAG ───────────────────────────────────────────────────────────
 
+/** Проект / клиент, к которому принадлежит документ. */
+export type Project = 'alisa' | 'bestseller'
+
 /**
- * Один чанк документа после парсинга и нарезки.
- * Метаданные хранятся рядом с вектором эмбеддинга.
+ * Документ после парсинга, до нарезки на чанки.
+ * Одна запись = одна логическая единица исходного файла
+ * (страница PDF, слайд PPTX, лист XLSX, или весь DOCX).
  */
-export interface Chunk {
-  /** Имя исходного файла (например, "alice-ipoteka.pdf") */
+export interface SourceDocument {
+  /** Имя файла без пути, например "presentation.pdf" */
   source: string
-  /** Порядковый номер чанка в документе, начиная с 0 */
-  chunk_index: number
+  /** Проект, к которому относится документ */
+  project: Project
+  /** Извлечённый текстовый контент */
+  text: string
+  /** Номер страницы PDF (1-based); undefined для других форматов */
+  page?: number
+  /** Номер слайда PPTX (1-based); undefined для других форматов */
+  slide?: number
+  /** Имя листа XLSX; undefined для других форматов */
+  sheet?: string
+}
+
+/**
+ * Чанк документа после нарезки, готовый к embedding.
+ *
+ * source    — уникальный идентификатор в формате "project/filename",
+ *             например "alisa/presentation.pdf". Включает project,
+ *             чтобы файлы с одинаковым basename не конфликтовали.
+ * chunkIndex — сквозной 0-based счётчик внутри source; стабилен и
+ *              детерминирован при одинаковом входе.
+ *
+ * Диапазоны страниц / слайдов:
+ *   pageStart / pageEnd   — первая и последняя страница PDF в чанке.
+ *   slideStart / slideEnd — первый и последний слайд PPTX в чанке.
+ *   Если чанк состоит из одной единицы, Start === End.
+ */
+export interface DocumentChunk {
+  /** "project/filename", например "alisa/presentation.pdf" */
+  source: string
+  /** Проект, к которому относится документ */
+  project: Project
+  /** Порядковый номер чанка внутри source (0-based) */
+  chunkIndex: number
   /** Текст чанка (ориентир 400–800 токенов) */
   text: string
+  /** Первая страница PDF в чанке (1-based) */
+  pageStart?: number
+  /** Последняя страница PDF в чанке (1-based) */
+  pageEnd?: number
+  /** Первый слайд PPTX в чанке (1-based) */
+  slideStart?: number
+  /** Последний слайд PPTX в чанке (1-based) */
+  slideEnd?: number
+  /** Имя листа XLSX */
+  sheet?: string
 }
 
 /**
@@ -86,6 +131,36 @@ export interface Chunk {
 export interface Citation {
   source: string
   quote: string
+}
+
+/**
+ * Один chunk, возвращённый semantic search из Qdrant.
+ * Текст — исходный, не переписанный.
+ */
+export interface RetrievedChunk {
+  /** Косинусное сходство (0–1 для Cosine с нормализованными векторами) */
+  score: number
+  /** Исходный текст chunk без изменений */
+  text: string
+  /** "project/filename", например "alisa/presentation.pdf" */
+  source: string
+  project: Project
+  chunkIndex: number
+  pageStart?: number
+  pageEnd?: number
+  slideStart?: number
+  slideEnd?: number
+  sheet?: string
+}
+
+/**
+ * Результат функции answerQuestion():
+ * вопрос + ответ LLM + citations из реальных Qdrant-чанков.
+ */
+export interface AnswerResult {
+  question: string
+  answer: string
+  citations: Citation[]
 }
 
 /** Тело запроса POST /api/ask */

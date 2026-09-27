@@ -14,16 +14,30 @@
     "check-stt-voicekit": "vite-node scripts/checkVoicekit.ts",
     "check-llm": "vite-node scripts/checkBothub.ts",
     "check-e2e": "vite-node scripts/checkE2E.ts",
-    "ingest": "vite-node scripts/ingest.ts"
+    "ingest": "vite-node scripts/ingest.ts",
+    "rag:ingest:check": "vite-node scripts/checkRagIngest.ts",
+    "rag:chunks:check": "vite-node scripts/checkRagChunks.ts",
+    "rag:embed:check": "vite-node scripts/checkRagEmbed.ts",
+    "rag:retrieve:check": "vite-node scripts/checkRagRetrieve.ts",
+    "rag:ask:check": "vite-node scripts/checkRagAsk.ts",
+    "rag:endpoint:check": "vite-node scripts/checkRagEndpoint.ts",
+    "rag:splittext:check": "vite-node scripts/checkSplitTextTail.ts",
+    "rag:contract:check": "vite-node scripts/checkRagAnswerContract.ts"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.5",
     "@grpc/proto-loader": "^0.8.1",
+    "@qdrant/js-client-rest": "^1.19.0",
+    "jszip": "^3.10.2",
+    "mammoth": "^1.12.3",
     "nuxt": "^3.21.11",
+    "pdf-parse": "^2.4.5",
     "vue": "^3.5.40",
-    "vue-router": "^5.2.0"
+    "vue-router": "^5.2.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/jszip": "^3.4.0",
     "@types/node": "^26.6.2",
     "dotenv": "^18.0.3",
     "typescript": "~5.8",
