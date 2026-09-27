@@ -1,0 +1,47 @@
+/* ─── Design tokens from Figma (node 1:36178 / 1:36276) ─────────────────── */
+:root {
+  /* Colors */
+  --c-bg:        #f4f8fb;   /* --05 */
+  --c-white:     #fefeff;   /* --white */
+  --c-border:    #d8e6f4;   /* --08 */
+  --c-text-dark: #2f2c27;   /* --04 */
+  --c-text-mid:  #6c8daf;   /* --07 */
+  --c-text-deep: #002346;   /* --06 */
+  --c-blue:      #2b7fff;   /* --10 */
+  --c-purple:    #ad46ff;   /* --11 */
+  --c-green:     #1ac779;   /* --01 */
+  --c-red:       rgba(251, 65, 74, 0.9); /* --02 */
+  --c-ui-border: #e2e8f0;   /* --ui-border */
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-01: 4px 4px 20px rgba(0,35,70,0.03), -4px -4px 20px rgba(0,35,70,0.03);
+  --shadow-02: 4px 4px 40px rgba(0,35,70,0.04), -4px -4px 40px rgba(0,35,70,0.04);
+
+  /* Border radius */
+  --radius:    8px;
+  --radius-sm: 6px;
+  --radius-xl: 50px;
+
+  /* Spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+}
+
+/* ─── Reset ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--c-text-dark);
+  background: var(--c-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+#__nuxt { height: 100%; }
