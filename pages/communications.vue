@@ -1,255 +1,416 @@
 <script setup lang="ts">
+/**
+ * Главный экран «Коммуникации» — точное повторение Figma node 1:35849
+ * "1920/ Коммуникации" (1920×950).
+ *
+ * Использованные Figma-узлы (см. отчёт в чате для полного списка):
+ *   1:35850 sidebar (Menu)
+ *   1:35852 title (заголовок + пилюли-табы)
+ *   1:35874 filters (search + кнопки)
+ *   1:35888 filters (чипсы фильтров)
+ *   1:35922 count row (частично — см. известные ограничения)
+ *   1:35954 table header
+ *   1:36033 table row
+ */
 import type { CallRecord } from '~/types/index'
 import { mockCalls } from '~/data/mockCalls'
+import { mockCommunications, type CommunicationRow } from '~/data/mockCommunications'
 
 useHead({ title: 'Коммуникации — Bestseller AI' })
 
-const calls = ref<CallRecord[]>(mockCalls)
+const rows = ref<CommunicationRow[]>(mockCommunications)
 const selectedCall = ref<CallRecord | null>(null)
 
-// Filter state
-const activeFilter = ref<'all' | 'clients' | 'agents'>('all')
+const headerFilter = ref<'all' | 'clients' | 'agents'>('all')
 
-const filteredCalls = computed(() => calls.value)
+function openRow(row: CommunicationRow) {
+  const call = mockCalls.find(c => c.id === row.callId)
+  if (call) selectedCall.value = call
+}
+function closePopup() { selectedCall.value = null }
 
-function openCall(call: CallRecord) { selectedCall.value = call }
-function closeCall() { selectedCall.value = null }
+/** id строки таблицы, соответствующей открытому в popup звонку (для подсветки) */
+const selectedRowId = computed<string | null>(() => {
+  if (!selectedCall.value) return null
+  return rows.value.find(r => r.callId === selectedCall.value!.id)?.id ?? null
+})
+
+/** Чипсы фильтров — визуальные, без реальной логики (Figma не задаёт поведение) */
+const filterChips = [
+  'Канал', 'MQL', 'SQL', 'Дата', 'Время', 'Менеджер', 'Длительность',
+  'Оценка', 'Город', 'Источник', 'Менеджер говорит %', 'Клиент говорит %',
+  'Отдел', 'Метка', 'Объект', 'Этап воронки', 'Агентство',
+]
 </script>
 
 <template>
-  <div class="layout">
-    <!-- ── Left sidebar (40px, matches Figma Menu) ─────────── -->
+  <div class="page">
+    <!-- ══ Sidebar (1:35850 "Menu") ══════════════════════════ -->
     <nav class="sidebar">
-      <div class="sidebar-logo">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <rect width="24" height="24" rx="6" fill="var(--c-blue)"/>
-          <path d="M7 12h10M7 8h6M7 16h8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
+      <div class="sidebar-top">
+        <div class="sidebar-logo">BZ</div>
+
+        <div class="sidebar-icons">
+          <button class="side-icon side-icon--active" title="Коммуникации">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 5h2.6c.5 0 .9.3 1 .8l.8 2.7c.1.4 0 .8-.3 1.1L6.8 11c.9 2 2.4 3.5 4.4 4.4l1.4-1.3c.3-.3.7-.4 1.1-.3l2.7.8c.5.1.8.5.8 1V18c0 .7-.6 1.2-1.2 1.2H15.5C9.3 19.2 4.8 14.7 4.8 8.5V8c0-.7.5-1.2 1.2-1.2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="side-icon" title="Метки">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M11 4H6a2 2 0 00-2 2v5l9.6 9.6a2 2 0 002.8 0l4.2-4.2a2 2 0 000-2.8L11 4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="8" cy="9" r="1.3" fill="currentColor"/></svg>
+          </button>
+          <button class="side-icon" title="Документы">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v13a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 12h7M9 16h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+
+        <div class="side-divider" />
+
+        <div class="sidebar-icons">
+          <button class="side-icon" title="Дашборд">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
+          </button>
+          <button class="side-icon" title="Аналитика">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="4" y="13" width="4" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="10" y="9" width="4" height="11" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="16" y="4" width="4" height="16" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+          </button>
+          <button class="side-icon" title="Отчёты">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v13a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 10h7M9 14h7M9 18h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+          <button class="side-icon" title="Клиенты">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 20c0-3 2.5-5.5 5.5-5.5S14.5 17 14.5 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="17" cy="9" r="2.3" stroke="currentColor" stroke-width="1.5"/><path d="M15 20c0-2.3 1.5-4.1 3.5-4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+          <button class="side-icon" title="Скоринг">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 15a8 8 0 1116 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 15l4-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+          <button class="side-icon" title="Задачи">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 6h14M5 12h14M5 18h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+          <button class="side-icon" title="Уведомления">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 10a6 6 0 1112 0c0 3 1 4.5 1.5 5.5H4.5C5 14.5 6 13 6 10z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 19a2 2 0 004 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+          <button class="side-icon" title="Настройки">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M12 3v2M12 19v2M4.2 7l1.7 1M18.1 16l1.7 1M4.2 17l1.7-1M18.1 8l1.7-1M3 12h2M19 12h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="sidebar-icons">
-        <button class="nav-icon nav-icon--active" title="Коммуникации">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H6l-4 3V5z"
-                  stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+
+      <div class="sidebar-bottom">
+        <button class="side-icon" title="Понравилось">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M7 11v9H4a1 1 0 01-1-1v-7a1 1 0 011-1h3zm0 0l3.5-7a2 2 0 013.7 1.2L13.3 9H19a2 2 0 012 2.3l-1.4 7A2 2 0 0117.6 20H10a3 3 0 01-3-3v-6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
         </button>
-        <button class="nav-icon" title="Аналитика">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <rect x="3" y="11" width="3" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="8.5" y="7" width="3" height="10" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="14" y="3" width="3" height="14" rx="1" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
+        <button class="side-icon" title="Сохранённое">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
         </button>
-        <button class="nav-icon" title="База знаний">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-                  stroke="currentColor" stroke-width="1.5"/>
-            <path d="M8 7h4M8 11h4M8 15h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
+        <button class="side-icon" title="Медиа">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="14" rx="1.5" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="9" r="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M3 15l5-4 4 3 3-3 6 5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
         </button>
       </div>
     </nav>
 
-    <!-- ── Main content ─────────────────────────────────────── -->
+    <!-- ══ Main ═══════════════════════════════════════════════ -->
     <main class="main">
-      <!-- Header -->
-      <header class="page-header">
-        <div class="header-left">
-          <h1 class="page-title">Коммуникации</h1>
-          <div class="header-tabs">
-            <button
-              class="header-tab"
-              :class="{ 'header-tab--active': activeFilter === 'all' }"
-              @click="activeFilter = 'all'"
-            >Все</button>
-            <button
-              class="header-tab"
-              :class="{ 'header-tab--active': activeFilter === 'clients' }"
-              @click="activeFilter = 'clients'"
-            >Клиенты</button>
-            <button
-              class="header-tab"
-              :class="{ 'header-tab--active': activeFilter === 'agents' }"
-              @click="activeFilter = 'agents'"
-            >Агенты</button>
-          </div>
-        </div>
-        <div class="header-right">
-          <div class="search-box">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/>
-              <path d="M12.5 12.5L16 16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            </svg>
-            <input class="search-input" placeholder="Клиент, менеджер, телефон..." />
-          </div>
-          <button class="filter-btn">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M2 5h14M5 9h8M8 13h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            </svg>
-            Фильтры
-          </button>
-        </div>
-      </header>
 
-      <!-- Subheader: count -->
-      <div class="subheader">
-        <span class="count-label">Найдено коммуникаций: <strong>{{ filteredCalls.length }}</strong></span>
+      <!-- ── Title block (1:35852) ───────────────────────────── -->
+      <div class="title-block">
+
+        <!-- header row: title + tab pills + search + filter btn + icon btns -->
+        <div class="header-row">
+          <div class="header-left">
+            <h1 class="page-title">Коммуникации</h1>
+            <div class="pill-group">
+              <button
+                class="pill"
+                :class="{ 'pill--active': headerFilter === 'all' }"
+                @click="headerFilter = 'all'"
+              >Все</button>
+              <button
+                class="pill"
+                :class="{ 'pill--active': headerFilter === 'clients' }"
+                @click="headerFilter = 'clients'"
+              >Клиенты</button>
+              <button
+                class="pill"
+                :class="{ 'pill--active': headerFilter === 'agents' }"
+                @click="headerFilter = 'agents'"
+              >Агенты</button>
+            </div>
+          </div>
+
+          <div class="header-right">
+            <div class="search-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M20 20l-4.5-4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <input class="search-input" placeholder="Клиент, менеджер, телефон..." />
+            </div>
+
+            <button class="filters-btn">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M6 12h12M10 18h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span class="filters-btn-label">Фильтры</span>
+              <span class="filters-badge">3</span>
+            </button>
+
+            <button class="icon-btn" title="Добавить виджет">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>
+            </button>
+            <button class="icon-btn" title="Загрузить коммуникацию">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M12 15l-4-4M12 15l4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+            <button class="icon-btn" title="Скачать таблицу">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M8 11l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- filter chips panel (1:35888) -->
+        <div class="filter-chips-panel">
+          <div class="filter-chips">
+            <span class="chip"><ChipIcon /> Канал <ChevronIcon /></span>
+            <span class="chip chip--active">Тип: Первичная <CloseIcon /></span>
+            <span v-for="chip in filterChips" :key="chip" class="chip"><ChipIcon /> {{ chip }} <ChevronIcon /></span>
+
+            <span class="chip-actions">
+              <button class="btn-reset">Сбросить все <CloseIcon /></button>
+              <button class="btn-apply">Применить</button>
+            </span>
+          </div>
+        </div>
       </div>
 
-      <!-- Table -->
-      <div class="table-container">
-        <CallsTable
-          :calls="filteredCalls"
-          :selected-id="selectedCall?.id ?? null"
-          @select="openCall"
-        />
+      <!-- ── Table area (1:35921 container) ──────────────────── -->
+      <div class="table-area">
+        <div class="count-row">
+          <span class="count-text">Найдено коммуникаций: <strong>{{ rows.length }}</strong></span>
+          <div class="count-actions">
+            <button class="btn-reset-sm">
+              Сбросить
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </button>
+            <button class="icon-btn-sm" title="Действие">
+              <svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M8.5 2v13M2 8.5h13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </button>
+            <button class="icon-btn-sm" title="Действие">
+              <svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M8.5 3v9M4.5 8l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="calls-panel">
+          <CallsTable
+            :rows="rows"
+            :selected-id="selectedRowId"
+            @select="openRow"
+          />
+        </div>
       </div>
     </main>
 
-    <!-- ── Popup ────────────────────────────────────────────── -->
+    <!-- ══ Popup (не меняется на этом этапе) ══════════════════ -->
     <Transition name="popup">
       <CallDetailPopup
         v-if="selectedCall"
         :call="selectedCall"
-        @close="closeCall"
+        @close="closePopup"
       />
     </Transition>
   </div>
 </template>
 
+<script lang="ts">
+import { defineComponent, h } from 'vue'
+
+const ChipIcon = defineComponent({
+  render() { return h('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', style: 'flex-shrink:0' }, [h('circle', { cx: 8, cy: 8, r: 5.5, stroke: 'currentColor', 'stroke-width': 1.3 })]) },
+})
+const ChevronIcon = defineComponent({
+  render() { return h('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', style: 'flex-shrink:0' }, [h('path', { d: 'M4 6l4 4 4-4', stroke: 'currentColor', 'stroke-width': 1.3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })]) },
+})
+const CloseIcon = defineComponent({
+  render() { return h('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', style: 'flex-shrink:0' }, [h('path', { d: 'M4 4l8 8M12 4l-8 8', stroke: 'currentColor', 'stroke-width': 1.3, 'stroke-linecap': 'round' })]) },
+})
+
+export default defineComponent({ components: { ChipIcon, ChevronIcon, CloseIcon } })
+</script>
+
 <style scoped>
-/* ── Layout ──────────────────────────────────────────── */
-.layout {
+/* ══ Page layout: 32px canvas padding, 32px gap sidebar/main (Figma frame margins) ══ */
+.page {
   display: flex;
   height: 100vh;
-  overflow: hidden;
+  padding: 32px;
+  gap: 32px;
   background: var(--c-bg);
+  overflow: hidden;
 }
 
-/* ── Sidebar ─────────────────────────────────────────── */
+/* ══ Sidebar (1:35850) — 40px wide ══════════════════════════ */
 .sidebar {
   flex-shrink: 0;
-  width: 64px;
-  background: var(--c-white);
-  border-right: 1px solid var(--c-border);
+  width: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-top {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 0;
-  gap: 8px;
+  gap: 16px;
+  width: 100%;
 }
 
 .sidebar-logo {
-  margin-bottom: 16px;
+  width: 40px;
+  height: 40px;
+  background: #e20718;
+  border-radius: 4px;
+  color: #fefeff;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .sidebar-icons {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
 }
 
-.nav-icon {
+.side-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--c-border);
+}
+
+.side-icon {
   width: 40px;
   height: 40px;
   border: none;
-  border-radius: var(--radius);
+  border-radius: 8px;
   background: transparent;
   color: var(--c-text-mid);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
   transition: background 0.12s, color 0.12s;
 }
 
-.nav-icon:hover { background: var(--c-bg); color: var(--c-text-dark); }
+.side-icon:hover { background: var(--c-bg); color: var(--c-text-dark); }
 
-.nav-icon--active {
-  background: rgba(43,127,255,0.1);
+.side-icon--active {
+  background: rgba(43, 127, 255, 0.1);
   color: var(--c-blue);
 }
 
-/* ── Main ────────────────────────────────────────────── */
+.sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--c-border);
+  width: 100%;
+}
+
+/* ══ Main ═══════════════════════════════════════════════════ */
 .main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 16px;
   min-width: 0;
+  overflow: hidden;
 }
 
-/* ── Page header ─────────────────────────────────────── */
-.page-header {
+/* ── Title block (1:35852) ──────────────────────────────────── */
+.title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   flex-shrink: 0;
+}
+
+/* header row */
+.header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  height: 64px;
-  border-bottom: 1px solid var(--c-border);
-  background: var(--c-white);
   gap: 16px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
 }
 
 .page-title {
   font-family: 'Inter', sans-serif;
-  font-size: 24px;
+  font-size: 32px;
   font-weight: 500;
   color: var(--c-text-dark);
+  line-height: 1.3;
   white-space: nowrap;
 }
 
-.header-tabs {
+/* Tab pills (1:35856) */
+.pill-group {
   display: flex;
-  background: var(--c-bg);
-  border-radius: var(--radius-sm);
-  padding: 3px;
-  gap: 2px;
+  align-items: center;
+  gap: 0;
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  padding: 6px;
 }
 
-.header-tab {
-  height: 28px;
+.pill {
+  height: 34px;
+  min-width: 84px;
   padding: 0 12px;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  color: var(--c-text-deep);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--c-text-mid);
   cursor: pointer;
-  transition: background 0.12s;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
 }
 
-.header-tab--active {
-  background: var(--c-white);
-  font-weight: 500;
-  box-shadow: var(--shadow-sm);
+.pill--active {
+  background: rgba(43, 127, 255, 0.1);
+  color: var(--c-blue);
 }
 
+/* Header right: search + filters + icons */
 .header-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
-/* Search */
 .search-box {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: var(--c-bg);
+  gap: 16px;
+  width: 489px;
+  height: 44px;
+  background: var(--c-white);
   border: 1px solid var(--c-border);
   border-radius: var(--radius);
-  padding: 0 12px;
-  height: 40px;
-  min-width: 280px;
+  padding: 6px 8px;
   color: var(--c-text-mid);
 }
 
@@ -261,56 +422,215 @@ function closeCall() { selectedCall.value = null }
   font-size: 14px;
   color: var(--c-text-dark);
   outline: none;
+  min-width: 0;
 }
 
 .search-input::placeholder { color: var(--c-text-mid); }
 
-/* Filter button */
-.filter-btn {
-  height: 40px;
-  padding: 0 16px;
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius);
-  background: var(--c-bg);
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  color: var(--c-text-dark);
+.filters-btn {
+  height: 44px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
   gap: 8px;
+  background: var(--c-blue);
+  border: 1px solid var(--c-blue);
+  border-radius: var(--radius);
+  color: #fefeff;
   cursor: pointer;
-  transition: background 0.12s;
+  flex-shrink: 0;
+}
+
+.filters-btn-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
-.filter-btn:hover { background: var(--c-border); }
-
-/* ── Subheader ───────────────────────────────────────── */
-.subheader {
-  flex-shrink: 0;
-  padding: 8px 16px;
-  background: var(--c-white);
-  border-bottom: 1px solid var(--c-border);
+.filters-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 12px;
+  background: var(--c-bg);
+  color: var(--c-blue);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.count-label {
+.icon-btn {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 6px;
+  background: var(--c-white);
+  border: 1px solid var(--c-blue);
+  border-radius: var(--radius);
+  color: var(--c-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.icon-btn:hover { background: var(--c-bg); }
+
+/* Filter chips panel (1:35888) */
+.filter-chips-panel {
+  background: var(--c-white);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow-02);
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 8px;
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
   font-family: 'Inter', sans-serif;
-  font-size: 13px;
+  font-size: 14px;
+  color: var(--c-text-deep);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chip--active {
+  background: rgba(43, 127, 255, 0.1);
+  border-color: var(--c-blue);
+}
+
+.chip-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.btn-reset {
+  height: 32px;
+  min-width: 109px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--c-text-mid);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-apply {
+  height: 32px;
+  min-width: 109px;
+  padding: 8px 12px;
+  background: var(--c-blue);
+  border: none;
+  border-radius: var(--radius);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--c-bg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── Table area (1:35921) ────────────────────────────────────── */
+.table-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.count-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.count-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
   color: var(--c-text-mid);
 }
 
-/* ── Table container ─────────────────────────────────── */
-.table-container {
-  flex: 1;
-  overflow: hidden;
-  padding: 16px;
+.count-text strong { color: var(--c-text-dark); font-weight: 600; }
+
+.count-actions {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
-/* ── Popup transition ────────────────────────────────── */
+.btn-reset-sm {
+  height: 32px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--c-text-mid);
+  cursor: pointer;
+}
+
+.icon-btn-sm {
+  width: 32px;
+  height: 32px;
+  background: var(--c-bg);
+  border: none;
+  border-radius: var(--radius);
+  color: var(--c-text-mid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.calls-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  display: flex;
+}
+
+/* ── Popup transition ────────────────────────────────────────── */
 .popup-enter-active,
 .popup-leave-active { transition: transform 0.22s ease, opacity 0.22s ease; }
 .popup-enter-from,
 .popup-leave-to     { transform: translateX(32px); opacity: 0; }
+
+/* ── Minimal responsive safety net (~1280px) ────────────────── */
+@media (max-width: 1400px) {
+  .search-box { width: 320px; }
+}
 </style>
