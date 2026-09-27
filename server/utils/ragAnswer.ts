@@ -34,6 +34,7 @@
 import type { Citation, AnswerResult, Project } from '../../types/index'
 import { retrieveChunks } from './ragRetrieve'
 import type { RetrievedChunk } from '../../types/index'
+import { withRetry } from './ragRetry'
 
 // ─── Конфигурация ─────────────────────────────────────────────────────────────
 
@@ -258,10 +259,10 @@ export interface LlmRawAnswer {
   usedChunks: UsedChunkEntry[]
 }
 
-async function callLlm(
+async function fetchLlmRawContent(
   userMessage: string,
   config: LlmConfig,
-): Promise<LlmRawAnswer> {
+): Promise<string> {
   let res: Response
   try {
     res = await fetch(`${BOTHUB_BASE_URL}/chat/completions`, {
@@ -301,6 +302,18 @@ async function callLlm(
   if (typeof rawContent !== 'string' || !rawContent.trim()) {
     throw new Error('ragAnswer: пустой content в ответе LLM')
   }
+
+  return rawContent
+}
+
+async function callLlm(
+  userMessage: string,
+  config: LlmConfig,
+): Promise<LlmRawAnswer> {
+  const rawContent = await withRetry(
+    () => fetchLlmRawContent(userMessage, config),
+    { label: 'RAG' },
+  )
 
   return parseStrictLlmJson(rawContent)
 }

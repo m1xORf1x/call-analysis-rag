@@ -24,16 +24,16 @@ const SYSTEM_PROMPT = `Ты — аналитик звонков отдела п�
 
 Структура ответа:
 {
-  "summary": "<краткое резюме разговора (2–4 предложения)>",
+  "summary": "<краткое резюме разговора (2–3 предложения)>",
   "strongPoints": "<сильные стороны работы менеджера>",
   "weakPoints": "<слабые стороны и упущения менеджера>",
   "recommendation": "<конкретные рекомендации для улучшения работы менеджера>",
   "client": {
     "interest": "<high | medium | low>",
     "object": "<название ЖК или объекта недвижимости, если упоминался; иначе null>",
-    "budget": "<бюджет или ценовой диапазон клиента, если упоминался; иначе null>",
+    "budget": "<бюджет клиента на покупку, если клиент сам назвал сумму или диапазон; иначе null>",
     "objections": ["<возражение 1>", "<возражение 2>"],
-    "competitors": ["<конкурент 1>", "<конкурент 2>"]
+    "competitors": ["<конкурирующий ЖК или застройщик 1>", "<конкурирующий ЖК или застройщик 2>"]
   }
 }
 
@@ -42,7 +42,9 @@ const SYSTEM_PROMPT = `Ты — аналитик звонков отдела п�
 2. Если значение не упоминалось, используй null — не строку «не упоминался» и не пустую строку.
 3. Если список пуст, используй [] — пустой массив.
 4. Поле "interest" принимает строго одно из трёх значений: "high", "medium", "low".
-5. Возвращай только JSON. Никакого Markdown, никаких блоков \`\`\`json.`
+5. Поле "budget" — ТОЛЬКО сумма или диапазон бюджета, который клиент сам назвал для покупки квартиры. НЕ записывай сюда: обеспечительный взнос, первоначальный взнос, цены квартир от менеджера, суммы ипотеки или брони, если клиент не назвал их как свой бюджет. Если клиент не называл бюджет — null.
+6. Поле "competitors" — ТОЛЬКО другие жилые комплексы (ЖК) или застройщики, которых клиент упоминает для сравнения с рассматриваемым объектом. НЕ записывай сюда: риэлторов, агентства, банки, внутренние подразделения, формулировки вроде «внешний риэлтор». Если клиент не сравнивал с другими ЖК/застройщиками — [].
+7. Возвращай только JSON. Никакого Markdown, никаких блоков \`\`\`json.`
 
 // ─── OpenAI-совместимые типы ответа ─────────────────────────────────────────
 
@@ -98,6 +100,43 @@ function stripMarkdownFences(text: string): string {
   return match ? match[1]!.trim() : trimmed
 }
 
+/** Клиент явно назвал бюджет / ценовой предел на покупку. */
+function clientDeclaredBudget(transcript: string): boolean {
+  return /\b(бюджет|рассчитывал.{0,30}(на|примерно)|максимум|могу (себе )?позволить|готов.{0,40}(заплатить|вложить|потратить)|рассматрива.{0,20}до|до \d[\d\s]*(?:млн|миллион|руб|₽)|у меня \d)/i.test(transcript)
+}
+
+/** Отсекает типичные ошибки классификации budget / competitors по схеме ТЗ. */
+function validateClientSemantics(
+  budget: string | null,
+  competitors: string[],
+  transcript: string,
+): void {
+  if (budget) {
+    const lower = budget.toLowerCase()
+    if (lower.includes('обеспечительн') || lower.includes('первоначальн')) {
+      throw new Error(
+        `BotHub: client.budget должно содержать только заявленный клиентом бюджет на покупку, не взнос (получено: ${JSON.stringify(budget)})`,
+      )
+    }
+
+    const t = transcript.toLowerCase()
+    if (/обеспечительн\s+взнос|залог|бронь/i.test(t) && !clientDeclaredBudget(transcript)) {
+      throw new Error(
+        `BotHub: client.budget = null — в разговоре обсуждался обеспечительный взнос/бронь, но клиент не назвал бюджет на покупку (получено: ${JSON.stringify(budget)})`,
+      )
+    }
+  }
+
+  for (const name of competitors) {
+    const lower = name.toLowerCase()
+    if (lower.includes('риэлтор') || lower.includes('риелтор') || lower.includes('агентств')) {
+      throw new Error(
+        `BotHub: client.competitors — только чужие ЖК/застройщики, не риэлторы (получено: ${JSON.stringify(name)})`,
+      )
+    }
+  }
+}
+
 // ─── Валидация ответа LLM ────────────────────────────────────────────────────
 
 /**
@@ -107,7 +146,7 @@ function stripMarkdownFences(text: string): string {
  * @param data       Уже распарсенный JSON.
  * @param rawContent Исходный текст ответа модели — используется в сообщениях об ошибке.
  */
-function validateCallAnalysis(data: unknown, rawContent: string): CallAnalysis {
+function validateCallAnalysis(data: unknown, rawContent: string, transcript: string): CallAnalysis {
   const preview = rawContent.slice(0, 300)
 
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
@@ -183,6 +222,8 @@ function validateCallAnalysis(data: unknown, rawContent: string): CallAnalysis {
       `BotHub: client.competitors должно быть string[] (получено: ${JSON.stringify(competitors)})`,
     )
   }
+
+  validateClientSemantics(budget as string | null, competitors as string[], transcript)
 
   return {
     summary,
@@ -285,5 +326,5 @@ export async function analyseTranscript(transcript: string): Promise<CallAnalysi
   }
 
   // ── 6. Строгая валидация по схеме CallAnalysis ──────────────────────────────
-  return validateCallAnalysis(parsed, rawContent)
+  return validateCallAnalysis(parsed, rawContent, transcript)
 }

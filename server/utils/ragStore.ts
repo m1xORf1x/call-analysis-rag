@@ -8,7 +8,8 @@
  *   - Credentials никогда не попадают в логи или ошибки.
  *
  * Идемпотентность:
- *   - Point ID детерминирован: SHA-256(source + ":" + chunkIndex) → UUID-формат.
+ *   - Point ID детерминирован: SHA-256(source + ":" + chunk_index) → UUID-формат.
+ *   - Payload metadata по ТЗ: source, chunk_index, text (+ опциональные page/slide/sheet).
  *   - upsert перезаписывает существующий point с тем же ID — дубликатов нет.
  *
  * Stale points (устаревшие chunks удалённых/сокращённых документов):
@@ -22,6 +23,7 @@
 import { createHash } from 'node:crypto'
 import { QdrantClient } from '@qdrant/js-client-rest'
 import type { DocumentChunk } from '../../types/index'
+import { withRetry } from './ragRetry'
 
 // ─── Конфигурация ────────────────────────────────────────────────────────────
 
@@ -138,7 +140,7 @@ export async function upsertPoints(
       text: chunk.text,
       source: chunk.source,
       project: chunk.project,
-      chunkIndex: chunk.chunkIndex,
+      chunk_index: chunk.chunkIndex,
     }
     if (chunk.pageStart  !== undefined) payload['pageStart']  = chunk.pageStart
     if (chunk.pageEnd    !== undefined) payload['pageEnd']    = chunk.pageEnd
@@ -213,6 +215,17 @@ export interface RawScoredPoint {
  * @returns            Массив scored points с payload, отсортированный по score desc.
  */
 export async function searchPoints(
+  queryVector: number[],
+  topK: number,
+  project?: string,
+): Promise<RawScoredPoint[]> {
+  return withRetry(
+    () => searchPointsOnce(queryVector, topK, project),
+    { label: 'RAG' },
+  )
+}
+
+async function searchPointsOnce(
   queryVector: number[],
   topK: number,
   project?: string,

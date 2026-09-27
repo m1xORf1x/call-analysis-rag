@@ -1,3 +1,5 @@
+import { withRetry } from './ragRetry'
+
 /**
  * server/utils/ragEmbed.ts
  *
@@ -122,6 +124,10 @@ export async function batchEmbedTexts(
 export async function embedTexts(texts: string[]): Promise<EmbedResult> {
   if (texts.length === 0) throw new Error('ragEmbed: передан пустой массив текстов')
 
+  return withRetry(() => embedTextsOnce(texts), { label: 'RAG' })
+}
+
+async function embedTextsOnce(texts: string[]): Promise<EmbedResult> {
   const { apiKey, model, baseUrl } = getConfig()
 
   // ── Запрос ──────────────────────────────────────────────────────────────────

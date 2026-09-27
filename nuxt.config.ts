@@ -3,6 +3,10 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
 
+  routeRules: {
+    '/': { redirect: '/communications' },
+  },
+
   css: ['~/assets/css/main.css'],
 
   app: {

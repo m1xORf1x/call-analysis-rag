@@ -2,10 +2,15 @@
 /**
  * Таблица коммуникаций — точное повторение Figma:
  *   header row : node 1:35954 (container, 2945×74, gap 16, padding 16)
- *   data row   : node 1:36033 (Table instance, 2945×64, gap 16, padding 16)
+ *   data row   : node 1:36033..1:36040 (Table instances, 2945 wide, высота
+ *                чередуется 64/80 — переменная высота строк из-за 2-строчного
+ *                переноса "Резюме"/"Метка"; воспроизведено естественным
+ *                flex-layout + line-clamp:2, без фиксированной высоты)
  *
- * Колонки и их ширины взяты из design context узла 1:35954 / 1:36033
- * (см. x/width каждого "Text" подузла). Порядок и состав колонок НЕ сокращены.
+ * Колонки и их ширины пере-проверены 27.09 через сохранённый get_metadata
+ * XML-дамп секции 1:35665 (узел 1:35954, x/width каждого "Text" подузла).
+ * Найдена и исправлена реальная ошибка: col-summary был 300px, в Figma
+ * "Резюме" (1:36026) — 150px. Порядок и состав колонок НЕ сокращены.
  */
 import type { CommunicationRow, Tag, Tone } from '~/data/mockCommunications'
 
@@ -32,7 +37,6 @@ const scoreColor: Record<Tone, string> = {
   yellow: '#ffb702', gray: 'var(--c-text-mid)', purple: 'var(--c-purple)',
 }
 
-const roleTagTone: Record<string, Tone> = { 'Клиент': 'blue', 'Менеджер': 'purple', 'Агент': 'green' }
 </script>
 
 <template>
@@ -47,8 +51,8 @@ const roleTagTone: Record<string, Tone> = { 'Клиент': 'blue', 'Менед�
         <div class="col col-mql"><span class="head-label">MQL</span><SortIcon /></div>
         <div class="col col-sql"><span class="head-label">SQL</span><SortIcon /></div>
         <div class="col col-crm"><span class="head-label">Лид<br>из crm</span><SortIcon /></div>
-        <div class="col col-date"><span class="head-label">Дата</span><SortIcon /></div>
-        <div class="col col-time"><span class="head-label">Время</span><SortIcon /></div>
+        <div class="col col-date"><span class="head-label">Статус</span><SortIcon /></div>
+        <div class="col col-time"><span class="head-label">Имя</span><SortIcon /></div>
         <div class="col col-contact"><span class="head-label">С кем говорили</span><SortIcon /></div>
         <div class="col col-phone"><span class="head-label">Контакты</span><SortIcon /></div>
         <div class="col col-manager"><span class="head-label">Менеджер</span><SortIcon /></div>
@@ -76,12 +80,12 @@ const roleTagTone: Record<string, Tone> = { 'Клиент': 'blue', 'Менед�
 
         <div class="col col-channel-icon">
           <span class="icon-chip">
-            <PhoneIcon :out="row.channelDirection === 'out'" />
+            <PhoneIcon :out="false" />
           </span>
         </div>
 
-        <div class="col col-channel"><span class="cell-text">{{ row.channel }}</span></div>
-        <div class="col col-type"><span class="cell-text">{{ row.type }}</span></div>
+        <div class="col col-channel"><span class="cell-dash">{{ row.channel }}</span></div>
+        <div class="col col-type"><span class="cell-dash">{{ row.type }}</span></div>
 
         <div class="col col-mql">
           <span v-if="row.mql" class="tag" :style="{ color: toneVars[row.mql.tone].text, background: toneVars[row.mql.tone].bg, borderColor: toneVars[row.mql.tone].border }">{{ row.mql.label }}</span>
@@ -96,19 +100,15 @@ const roleTagTone: Record<string, Tone> = { 'Клиент': 'blue', 'Менед�
           <span v-else class="cell-dash">—</span>
         </div>
 
-        <div class="col col-date"><span class="cell-text">{{ row.date }}</span></div>
-        <div class="col col-time"><span class="cell-text">{{ row.time }}</span></div>
+        <div class="col col-date"><span class="cell-text">{{ row.statusLabel }}</span></div>
+        <div class="col col-time"><span class="cell-text">{{ row.callName }}</span></div>
 
         <div class="col col-contact">
-          <span class="cell-text">{{ row.contactName }}</span>
-          <span
-            class="tag tag--role"
-            :style="{ color: toneVars[roleTagTone[row.contactRole]].text, background: 'rgba(0,122,255,0.05)', borderColor: 'rgba(0,122,255,0.15)' }"
-          >{{ row.contactRole }}</span>
+          <span class="cell-dash contact-role-unknown">Не определено</span>
         </div>
 
-        <div class="col col-phone"><span class="cell-text">{{ row.contactPhone }}</span></div>
-        <div class="col col-manager"><span class="cell-text">{{ row.manager }}</span></div>
+        <div class="col col-phone"><span class="cell-dash">{{ row.contactPhone }}</span></div>
+        <div class="col col-manager"><span class="cell-dash">{{ row.manager }}</span></div>
         <div class="col col-duration"><span class="cell-text cell-text--center">{{ row.durationLabel }}</span></div>
 
         <div class="col col-score">
@@ -117,19 +117,22 @@ const roleTagTone: Record<string, Tone> = { 'Клиент': 'blue', 'Менед�
         </div>
 
         <div class="col col-labels">
-          <span
-            v-for="(lbl, i) in row.labels"
-            :key="i"
-            class="tag"
-            :style="{ color: toneVars[lbl.tone].text, background: toneVars[lbl.tone].bg, borderColor: toneVars[lbl.tone].border }"
-          >{{ lbl.label }}</span>
+          <template v-if="row.labels.length">
+            <span
+              v-for="(lbl, i) in row.labels"
+              :key="i"
+              class="tag"
+              :style="{ color: toneVars[lbl.tone].text, background: toneVars[lbl.tone].bg, borderColor: toneVars[lbl.tone].border }"
+            >{{ lbl.label }}</span>
+          </template>
+          <span v-else class="cell-dash">—</span>
         </div>
 
-        <div class="col col-city"><span class="cell-text">{{ row.city }}</span></div>
-        <div class="col col-source"><span class="cell-text">{{ row.source }}</span></div>
-        <div class="col col-pct"><span class="cell-text">{{ row.managerTalkPct }}%</span></div>
-        <div class="col col-pct"><span class="cell-text">{{ row.clientTalkPct }}%</span></div>
-        <div class="col col-dept"><span class="cell-text">{{ row.department }}</span></div>
+        <div class="col col-city"><span class="cell-dash">{{ row.city }}</span></div>
+        <div class="col col-source"><span class="cell-dash">{{ row.source }}</span></div>
+        <div class="col col-pct"><span class="cell-dash">—</span></div>
+        <div class="col col-pct"><span class="cell-dash">—</span></div>
+        <div class="col col-dept"><span class="cell-dash">{{ row.department }}</span></div>
         <div class="col col-summary"><span class="cell-text cell-text--clamp">{{ row.summary }}</span></div>
 
         <div class="col col-trailing-icon">
@@ -145,11 +148,11 @@ const roleTagTone: Record<string, Tone> = { 'Клиент': 'blue', 'Менед�
 <script lang="ts">
 import { defineComponent, h } from 'vue'
 
-/** Иконка сортировки/подсказки у заголовка колонки (16×16, "coin" в Figma) */
+/** Иконка сортировки/подсказки у заголовка колонки — exact 16×16 (node "coin" в Figma header, напр. 1:35966) */
 const SortIcon = defineComponent({
   render() {
-    return h('svg', { width: 14, height: 14, viewBox: '0 0 14 14', fill: 'none', style: 'flex-shrink:0;color:var(--c-text-mid)' }, [
-      h('path', { d: 'M4 5l3 3 3-3', stroke: 'currentColor', 'stroke-width': 1.3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
+    return h('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', style: 'flex-shrink:0;color:var(--c-text-mid)' }, [
+      h('path', { d: 'M4.5 6l3.5 3.5L11.5 6', stroke: 'currentColor', 'stroke-width': 1.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
     ])
   },
 })
@@ -243,7 +246,7 @@ export default defineComponent({ components: { SortIcon, MoreIcon, PhoneIcon } }
 .col-source        { width: 150px; }
 .col-pct           { width: 110px; }
 .col-dept          { width: 150px; }
-.col-summary       { width: 300px; }
+.col-summary       { width: 150px; }
 .col-trailing-icon { width: 32px; justify-content: center; }
 
 /* ── Header cell ──────────────────────────────────────────── */
@@ -338,7 +341,10 @@ export default defineComponent({ components: { SortIcon, MoreIcon, PhoneIcon } }
   white-space: nowrap;
 }
 
-.tag--role { font-weight: 700; }
+.contact-role-unknown {
+  font-size: 12px;
+  line-height: 1.3;
+}
 
 .score {
   font-family: 'Inter', sans-serif;

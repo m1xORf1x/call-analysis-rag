@@ -31,7 +31,7 @@ import 'dotenv/config'
 import { fetchCalls, downloadAudio } from '../server/utils/callsApi'
 import { getSttProvider } from '../server/utils/sttProvider'
 import { analyseTranscript } from '../server/utils/bothub'
-import { getCall, createCall, updateCallStatus } from '../server/utils/db'
+import { getCall, createCall, updateCallStatus, clearStaleErrorsForCompletedCalls } from '../server/utils/db'
 
 // ─── Шаг 3: Транскрибировать аудио (реализовано) ───────────────────────────
 
@@ -70,6 +70,11 @@ async function runPipeline(): Promise<void> {
     return
   }
 
+  const staleCleared = clearStaleErrorsForCompletedCalls()
+  if (staleCleared > 0) {
+    console.log(`  🧹 Очищено stale error у ${staleCleared} completed-записей`)
+  }
+
   // Шаги 2–4: обработать каждый звонок независимо; результат — в SQLite
   for (const call of calls) {
     console.log(`\n── Звонок ${call.id} (${call.filename}, ${call.duration_sec}s) ──`)
@@ -77,6 +82,9 @@ async function runPipeline(): Promise<void> {
     // Шаг 0: проверка по SQLite — пропустить полностью обработанные, возобновить частично обработанные
     const existing = getCall(call.id)
     if (existing?.analysis_json) {
+      if (existing.error !== null) {
+        updateCallStatus(call.id, { status: 'completed', error: null })
+      }
       console.log('  ⏭ Уже проанализирован (analysis сохранён), пропуск')
       continue
     }

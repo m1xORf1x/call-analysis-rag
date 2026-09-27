@@ -58,7 +58,7 @@ export async function retrieveChunks(
       text:        String(p['text'] ?? ''),
       source:      String(p['source'] ?? ''),
       project:     (p['project'] as Project) ?? 'alisa',
-      chunkIndex:  Number(p['chunkIndex'] ?? 0),
+      chunkIndex:  Number(p['chunk_index'] ?? p['chunkIndex'] ?? 0),
       ...(p['pageStart']  !== undefined && { pageStart:  Number(p['pageStart'])  }),
       ...(p['pageEnd']    !== undefined && { pageEnd:    Number(p['pageEnd'])    }),
       ...(p['slideStart'] !== undefined && { slideStart: Number(p['slideStart']) }),

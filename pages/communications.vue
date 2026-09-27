@@ -12,32 +12,91 @@
  *   1:35954 table header
  *   1:36033 table row
  */
-import type { CallRecord } from '~/types/index'
-import { mockCalls } from '~/data/mockCalls'
-import { mockCommunications, type CommunicationRow } from '~/data/mockCommunications'
+import type { CallDetailResponse, CallsListResponse } from '~/types/callsApi'
+import type { CommunicationRow } from '~/data/mockCommunications'
+import CallDetailPopup from '~/components/calls/CallDetailPopup.vue'
 
 useHead({ title: 'Коммуникации — Bestseller AI' })
 
-const rows = ref<CommunicationRow[]>(mockCommunications)
-const selectedCall = ref<CallRecord | null>(null)
+const {
+  data: callsResponse,
+  pending: callsPending,
+  error: callsError,
+  refresh: refreshCalls,
+} = await useFetch<CallsListResponse>('/api/calls')
 
+const rows = computed(() => callsResponse.value?.calls ?? [])
+
+const popupCallId = ref<string | null>(null)
+const selectedCall = ref<CallDetailResponse | null>(null)
+const callDetailPending = ref(false)
+const callDetailError = ref<string | null>(null)
 const headerFilter = ref<'all' | 'clients' | 'agents'>('all')
 
-function openRow(row: CommunicationRow) {
-  const call = mockCalls.find(c => c.id === row.callId)
-  if (call) selectedCall.value = call
+async function openRow(row: CommunicationRow) {
+  popupCallId.value = row.callId
+  selectedCall.value = null
+  callDetailError.value = null
+  callDetailPending.value = true
+  try {
+    selectedCall.value = await $fetch<CallDetailResponse>(`/api/calls/${row.callId}`)
+  } catch {
+    callDetailError.value = 'Не удалось загрузить данные звонка'
+  } finally {
+    callDetailPending.value = false
+  }
 }
-function closePopup() { selectedCall.value = null }
+
+function closePopup() {
+  popupCallId.value = null
+  selectedCall.value = null
+  callDetailError.value = null
+  callDetailPending.value = false
+}
 
 /** id строки таблицы, соответствующей открытому в popup звонку (для подсветки) */
 const selectedRowId = computed<string | null>(() => {
-  if (!selectedCall.value) return null
-  return rows.value.find(r => r.callId === selectedCall.value!.id)?.id ?? null
+  if (!popupCallId.value) return null
+  return rows.value.find(r => r.callId === popupCallId.value)?.id ?? null
 })
 
-/** Чипсы фильтров — визуальные, без реальной логики (Figma не задаёт поведение) */
+/** Активный фильтр «Тип» (null = показать все строки) */
+const typeFilter = ref<string | null>(null)
+const typeMenuOpen = ref(false)
+
+/** Уникальные значения type из presentation rows — без хардкода */
+const typeOptions = computed(() => [...new Set(rows.value.map(row => row.type))].sort())
+
+const displayedRows = computed(() => {
+  if (!typeFilter.value) return rows.value
+  return rows.value.filter(row => row.type === typeFilter.value)
+})
+
+function selectType(value: string) {
+  typeFilter.value = value
+  typeMenuOpen.value = false
+}
+
+function clearTypeFilter() {
+  typeFilter.value = null
+  typeMenuOpen.value = false
+}
+
+function clearAllFilters() {
+  typeFilter.value = null
+  typeMenuOpen.value = false
+}
+
+function onDocumentClick() {
+  typeMenuOpen.value = false
+}
+
+onMounted(() => { document.addEventListener('click', onDocumentClick) })
+onBeforeUnmount(() => { document.removeEventListener('click', onDocumentClick) })
+
+/** Чипсы фильтров без логики (Figma) — кроме «Тип», см. typeFilter */
 const filterChips = [
-  'Канал', 'MQL', 'SQL', 'Дата', 'Время', 'Менеджер', 'Длительность',
+  'MQL', 'SQL', 'Дата', 'Время', 'Менеджер', 'Длительность',
   'Оценка', 'Город', 'Источник', 'Менеджер говорит %', 'Клиент говорит %',
   'Отдел', 'Метка', 'Объект', 'Этап воронки', 'Агентство',
 ]
@@ -52,7 +111,8 @@ const filterChips = [
 
         <div class="sidebar-icons">
           <button class="side-icon side-icon--active" title="Коммуникации">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 5h2.6c.5 0 .9.3 1 .8l.8 2.7c.1.4 0 .8-.3 1.1L6.8 11c.9 2 2.4 3.5 4.4 4.4l1.4-1.3c.3-.3.7-.4 1.1-.3l2.7.8c.5.1.8.5.8 1V18c0 .7-.6 1.2-1.2 1.2H15.5C9.3 19.2 4.8 14.7 4.8 8.5V8c0-.7.5-1.2 1.2-1.2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <!-- Тот же path, что в CallsTable PhoneIcon (viewBox 16×16 → 24×24) -->
+            <svg width="24" height="24" viewBox="0 0 16 16" fill="none"><path d="M3 3h2.2c.4 0 .8.3.9.7l.6 2.1c.1.3 0 .7-.3.9L5 8c.6 1.4 1.6 2.4 3 3l1.3-1.4c.2-.3.6-.4.9-.3l2.1.6c.4.1.7.5.7.9V13c0 .6-.5 1-1 1h-.5C6.4 14 2 9.6 2 4.5V4c0-.6.4-1 1-1z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <button class="side-icon" title="Метки">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M11 4H6a2 2 0 00-2 2v5l9.6 9.6a2 2 0 002.8 0l4.2-4.2a2 2 0 000-2.8L11 4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="8" cy="9" r="1.3" fill="currentColor"/></svg>
@@ -162,11 +222,26 @@ const filterChips = [
         <div class="filter-chips-panel">
           <div class="filter-chips">
             <span class="chip"><ChipIcon /> Канал <ChevronIcon /></span>
-            <span class="chip chip--active">Тип: Первичная <CloseIcon /></span>
+            <span v-if="typeFilter" class="chip chip--active">
+              Тип: {{ typeFilter }}
+              <span class="chip-close" role="button" tabindex="0" aria-label="Сбросить фильтр типа" @click="clearTypeFilter" @keydown.enter="clearTypeFilter"><CloseIcon /></span>
+            </span>
+            <span v-else class="chip-wrap">
+              <span class="chip" @click.stop="typeMenuOpen = !typeMenuOpen"><ChipIcon /> Тип <ChevronIcon /></span>
+              <div v-if="typeMenuOpen" class="type-menu" @click.stop>
+                <button
+                  v-for="option in typeOptions"
+                  :key="option"
+                  type="button"
+                  class="type-menu-item"
+                  @click="selectType(option)"
+                >{{ option }}</button>
+              </div>
+            </span>
             <span v-for="chip in filterChips" :key="chip" class="chip"><ChipIcon /> {{ chip }} <ChevronIcon /></span>
 
             <span class="chip-actions">
-              <button class="btn-reset">Сбросить все <CloseIcon /></button>
+              <button class="btn-reset" @click="clearAllFilters">Сбросить все <CloseIcon /></button>
               <button class="btn-apply">Применить</button>
             </span>
           </div>
@@ -176,7 +251,15 @@ const filterChips = [
       <!-- ── Table area (1:35921 container) ──────────────────── -->
       <div class="table-area">
         <div class="count-row">
-          <span class="count-text">Найдено коммуникаций: <strong>{{ rows.length }}</strong></span>
+          <span class="count-text">Найдено коммуникаций: <strong>{{ displayedRows.length }}</strong></span>
+          <!--
+            ИЗВЕСТНЫЙ ПРОБЕЛ (подтверждён повторно через get_metadata на 1:35926):
+            между текстом счётчика и группой действий в Figma есть ещё 2 ButtonSecondary
+            (65px и 159px, gap 8px, перед кнопкой "Сбросить" 113px) — их текст/иконки
+            не удалось получить: get_design_context на 1:35926 уперся в месячный лимит
+            Figma MCP (Starter/View = 20 вызовов/мес, исчерпан). Инстансы в metadata не
+            разворачивают текстовые дочерние узлы, поэтому не придумываю их содержимое.
+          -->
           <div class="count-actions">
             <button class="btn-reset-sm">
               Сбросить
@@ -192,8 +275,14 @@ const filterChips = [
         </div>
 
         <div class="calls-panel">
+          <div v-if="callsPending" class="panel-state">Загрузка коммуникаций…</div>
+          <div v-else-if="callsError" class="panel-state panel-state--error">
+            <p>Не удалось загрузить список коммуникаций</p>
+            <button type="button" class="panel-state-btn" @click="refreshCalls()">Повторить</button>
+          </div>
           <CallsTable
-            :rows="rows"
+            v-else
+            :rows="displayedRows"
             :selected-id="selectedRowId"
             @select="openRow"
           />
@@ -204,8 +293,10 @@ const filterChips = [
     <!-- ══ Popup (не меняется на этом этапе) ══════════════════ -->
     <Transition name="popup">
       <CallDetailPopup
-        v-if="selectedCall"
+        v-if="popupCallId"
         :call="selectedCall"
+        :loading="callDetailPending"
+        :load-error="callDetailError"
         @close="closePopup"
       />
     </Transition>
@@ -299,6 +390,11 @@ export default defineComponent({ components: { ChipIcon, ChevronIcon, CloseIcon 
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.12s, color 0.12s;
+}
+
+.side-icon svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .side-icon:hover { background: var(--c-bg); color: var(--c-text-dark); }
@@ -432,7 +528,7 @@ export default defineComponent({ components: { ChipIcon, ChevronIcon, CloseIcon 
   padding: 6px 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: var(--c-blue);
   border: 1px solid var(--c-blue);
   border-radius: var(--radius);
@@ -517,6 +613,49 @@ export default defineComponent({ components: { ChipIcon, ChevronIcon, CloseIcon 
   border-color: var(--c-blue);
 }
 
+.chip-close {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.chip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.type-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  min-width: 100%;
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-02);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.type-menu-item {
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--c-text-deep);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.type-menu-item:hover {
+  background: var(--c-bg);
+}
+
 .chip-actions {
   display: flex;
   align-items: center;
@@ -571,6 +710,9 @@ export default defineComponent({ components: { ChipIcon, ChevronIcon, CloseIcon 
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+  /* Figma (1:35923): содержимое count-row смещено на 16px, чтобы совпасть
+     с левым отступом чекбокса таблицы (col-checkbox начинается с x=16 в 1:35954/1:36033) */
+  padding-left: 16px;
 }
 
 .count-text {
@@ -621,6 +763,41 @@ export default defineComponent({ components: { ChipIcon, ChevronIcon, CloseIcon 
   border: 1px solid var(--c-border);
   border-radius: var(--radius);
   display: flex;
+}
+
+.panel-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--c-text-mid);
+  background: var(--c-white);
+}
+
+.panel-state--error p {
+  margin: 0;
+  color: var(--c-red);
+}
+
+.panel-state-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-white);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--c-text-dark);
+  cursor: pointer;
+}
+
+.panel-state-btn:hover {
+  background: var(--c-bg);
 }
 
 /* ── Popup transition ────────────────────────────────────────── */

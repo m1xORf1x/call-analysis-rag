@@ -12,12 +12,13 @@ export interface Call {
 }
 
 /**
- * Статус обработки звонка внутри нашего пайплайна.
- * pending   — известно из API, ещё не скачано
- * downloaded — аудио получено
- * transcribed — STT выполнен
- * analyzed   — LLM-анализ выполнен, результат сохранён
- * error      — на любом шаге произошла ошибка
+ * Публичный статус звонка (UI, calls.export.json, GET /api/calls).
+ *
+ * SQLite pipeline (scripts/pipeline.ts) использует другой набор:
+ *   pending → pending, transcribed → transcribed,
+ *   completed → analyzed, failed → error.
+ * Статус downloaded предусмотрен контрактом, но текущий pipeline его не выставляет.
+ * Нормализация: utils/callStatusNormalize.ts (exportCalls, API snapshot).
  */
 export type CallStatus =
   | 'pending'
@@ -39,11 +40,11 @@ export interface CallAnalysis {
     interest: 'high' | 'medium' | 'low'
     /** ЖК / лот, если звучал в разговоре; иначе null */
     object: string | null
-    /** Сумма, если звучала; иначе null */
+    /** Бюджет клиента на покупку, если клиент сам назвал сумму; иначе null */
     budget: string | null
     /** Возражения клиента короткими фразами */
     objections: string[]
-    /** Упомянутые конкурирующие ЖК / застройщики */
+    /** Другие ЖК / застройщики, с которыми клиент сравнивает объект; иначе [] */
     competitors: string[]
   }
 }
@@ -95,8 +96,8 @@ export interface SourceDocument {
  * source    — уникальный идентификатор в формате "project/filename",
  *             например "alisa/presentation.pdf". Включает project,
  *             чтобы файлы с одинаковым basename не конфликтовали.
- * chunkIndex — сквозной 0-based счётчик внутри source; стабилен и
- *              детерминирован при одинаковом входе.
+ * chunkIndex — сквозной 0-based счётчик внутри source; в Qdrant payload
+ *              сохраняется как chunk_index (source, chunk_index, text).
  *
  * Диапазоны страниц / слайдов:
  *   pageStart / pageEnd   — первая и последняя страница PDF в чанке.

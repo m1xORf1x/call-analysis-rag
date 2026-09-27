@@ -138,3 +138,21 @@ export function updateCallStatus(callId: string, input: UpdateCallStatusInput): 
 
   database.prepare(`UPDATE calls SET ${setClauses.join(', ')} WHERE call_id = ?`).run(...params)
 }
+
+/**
+ * Сбрасывает stale error у успешно завершённых звонков.
+ * Идемпотентно: затрагивает только status = 'completed' с analysis_json и ненулевым error.
+ */
+export function clearStaleErrorsForCompletedCalls(): number {
+  const database = initDatabase()
+  const result = database
+    .prepare(`
+      UPDATE calls
+      SET error = NULL
+      WHERE status = 'completed'
+        AND analysis_json IS NOT NULL
+        AND error IS NOT NULL
+    `)
+    .run()
+  return Number(result.changes)
+}

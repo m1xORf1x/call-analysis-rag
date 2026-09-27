@@ -2,6 +2,9 @@
   "name": "bestseller-ai-test",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
@@ -9,6 +12,8 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "pipeline": "vite-node scripts/pipeline.ts",
+    "export:calls": "vite-node scripts/exportCalls.ts",
+    "reanalyze:calls": "vite-node scripts/reanalyzeCalls.ts",
     "check-api": "vite-node scripts/checkCallsApi.ts",
     "check-stt": "vite-node scripts/checkStt.ts",
     "check-stt-voicekit": "vite-node scripts/checkVoicekit.ts",

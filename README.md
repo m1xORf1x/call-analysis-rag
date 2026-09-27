@@ -17,6 +17,10 @@
 
 ---
 
+## Требования
+
+- **Node.js 22+** (используется `node:sqlite` и другие API Node 22)
+
 ## Локальный запуск
 
 ### 1. Установить зависимости
@@ -59,7 +63,7 @@ Qdrant полностью пересоздаётся, поэтому в ней �
 
 ```bash
 npm run dev
-# http://localhost:3000
+# http://localhost:3000/communications  (GET / → redirect)
 ```
 
 ---
@@ -72,10 +76,9 @@ npm run dev
 |------------|----------|
 | `CALLS_API_BASE_URL` | Базовый URL сервера с записями звонков (предоставляет заказчик) |
 | `CALLS_API_TOKEN` | Bearer-токен для Calls API (предоставляет заказчик) |
-| `STT_API_KEY` | Ключ провайдера Speech-to-Text |
-| `LLM_API_KEY` | Ключ провайдера LLM (анализ + RAG) |
-| `LLM_MODEL` | Модель LLM (например, `gpt-4o`) |
-| `EMBEDDINGS_API_KEY` | Ключ для получения эмбеддингов (может совпадать с `LLM_API_KEY`) |
+| `SONIOX_API_KEY` / VoiceKit | STT (см. `STT_PROVIDER` в `.env.example`) |
+| `BOTHUB_API_KEY`, `BOTHUB_MODEL` | LLM для анализа звонков и RAG |
+| `EMBEDDINGS_*`, `QDRANT_*` | Embeddings и Qdrant для RAG |
 
 На хостинге (Vercel / Render / Railway) переменные прописываются в настройках окружения — **не в файлах**.
 
@@ -91,7 +94,7 @@ npm run dev
 ├── server/
 │   ├── api/              # Nitro API-эндпоинты (POST /api/ask)
 │   └── utils/            # ragIngest / ragChunk / ragEmbed / ragStore / ragAnswer…
-├── pages/index.vue       # Единственный экран (Часть 3)
+├── pages/communications.vue  # Единственный экран (Часть 3); GET / → redirect
 ├── components/           # Vue-компоненты
 ├── data/                 # Локальные данные (в .gitignore)
 │   ├── docs/             # Документы ЖК: PDF, DOCX, PPTX, XLSX, MD/Markdown
