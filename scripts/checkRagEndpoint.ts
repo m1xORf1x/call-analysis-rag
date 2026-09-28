@@ -10,16 +10,16 @@ import 'dotenv/config'
  * Это гарантирует, что тот же код, что стоит за HTTP-хендлером, работает корректно.
  *
  * Проверяет:
- *   1. Нормальный вопрос с ответом  → 200, answer + citations
- *   2. Вопрос без информации (off-topic) → 200, честный ответ, citations: []
- *   3. Пустой question (trim → "")    → 400
- *   4. Отсутствующий question field   → 400
- *   5. Не-строка в question           → 400
+ *   1. Вопрос без проекта сохраняет общий поиск.
+ *   2. Бестселлер / Алиса ограничивают citations своим project.
+ *   3. Вопрос без информации (off-topic) → 200, честный ответ, citations: [].
+ *   4. Невалидные question → 400.
  *
  * Запуск: npm run rag:endpoint:check
  */
 
 import { answerQuestion } from '../server/utils/ragAnswer'
+import { detectProject } from '../server/utils/ragProject'
 import { ensurePayloadIndexes } from '../server/utils/ragStore'
 import type { AskRequest, AskResponse } from '../types/index'
 
@@ -53,7 +53,8 @@ async function simulateEndpoint(rawBody: unknown): Promise<SimulatedResponse> {
 
   // Шаг 4: вызов pipeline
   try {
-    const result = await answerQuestion(trimmed)
+    const project = detectProject(trimmed)
+    const result = await answerQuestion(trimmed, { project })
     return {
       status: 200,
       body:   { answer: result.answer, citations: result.citations },
@@ -75,34 +76,50 @@ interface TestCase {
   expectAnswerContains?: string
   /** Если true — citations должны быть непустым массивом */
   expectCitations?: boolean
+  /** Если задан — все citations должны принадлежать этому project */
+  expectCitationPrefix?: string
 }
 
 const TEST_CASES: TestCase[] = [
   {
-    label:            '1. Нормальный вопрос (in-domain, bestseller)',
+    label:            '1. Вопрос без названия проекта сохраняет общий поиск',
     body:             { question: 'Какая ставка по семейной ипотеке?' } as AskRequest,
     expectStatus:     200,
     expectCitations:  true,
   },
   {
-    label:            '2. Вопрос без информации (off-topic)',
+    label:            '2. Явный Бестселлер фильтрует citations',
+    body:             { question: 'Расскажи про парковку ЖК Бестселлер' } as AskRequest,
+    expectStatus:     200,
+    expectCitations:  true,
+    expectCitationPrefix: 'bestseller/',
+  },
+  {
+    label:            '3. Явная Алиса фильтрует citations',
+    body:             { question: 'Где находится ЖК Алиса?' } as AskRequest,
+    expectStatus:     200,
+    expectCitations:  true,
+    expectCitationPrefix: 'alisa/',
+  },
+  {
+    label:            '4. Вопрос без информации (off-topic)',
     body:             { question: 'Какой курс доллара?' } as AskRequest,
     expectStatus:     200,
     expectAnswerContains: 'нет',
     expectCitations:  false,
   },
   {
-    label:            '3. Пустой question (trim → "")',
+    label:            '5. Пустой question (trim → "")',
     body:             { question: '   ' } as AskRequest,
     expectStatus:     400,
   },
   {
-    label:            '4. Отсутствующий question field',
+    label:            '6. Отсутствующий question field',
     body:             {} as AskRequest,
     expectStatus:     400,
   },
   {
-    label:            '5. question — не строка (число)',
+    label:            '7. question — не строка (число)',
     body:             { question: 42 },
     expectStatus:     400,
   },
@@ -197,6 +214,14 @@ async function main(): Promise<void> {
       }
       if (tc.expectCitations === false && body.citations.length > 0) {
         checkFailed(`Для off-topic ожидались citations: [], получено: ${body.citations.length} элементов`)
+      }
+      if (
+        tc.expectCitationPrefix &&
+        body.citations.some(c => !c.source.startsWith(tc.expectCitationPrefix!))
+      ) {
+        checkFailed(
+          `Все citations должны начинаться с «${tc.expectCitationPrefix}», получено: ${body.citations.map(c => c.source).join(', ')}`,
+        )
       }
 
       // Вывод ответа

@@ -87,6 +87,73 @@ function getConfig(): BotHubConfig {
   return { apiKey, model }
 }
 
+// ─── HTTP retry ──────────────────────────────────────────────────────────────
+
+const MAX_ATTEMPTS = 3
+const RETRY_DELAYS_MS = [500, 1000] as const
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isRetryableHttpStatus(status: number): boolean {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+}
+
+async function fetchChatCompletion(
+  apiKey: string,
+  model: string,
+  transcript: string,
+): Promise<Response> {
+  let lastError: Error | undefined
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(`${BOTHUB_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: transcript },
+          ],
+          temperature: 0,
+        }),
+      })
+
+      if (res.ok) return res
+
+      const httpError = new Error(`BotHub: HTTP ${res.status} ${res.statusText}`)
+      if (isRetryableHttpStatus(res.status) && attempt < MAX_ATTEMPTS) {
+        lastError = httpError
+        await sleep(RETRY_DELAYS_MS[attempt - 1]!)
+        continue
+      }
+      throw httpError
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('BotHub: HTTP')) {
+        throw err
+      }
+
+      const networkError = new Error(
+        `BotHub: сетевая ошибка — ${err instanceof Error ? err.message : String(err)}`,
+      )
+      if (attempt < MAX_ATTEMPTS) {
+        lastError = networkError
+        await sleep(RETRY_DELAYS_MS[attempt - 1]!)
+        continue
+      }
+      throw networkError
+    }
+  }
+
+  throw lastError ?? new Error(`BotHub: запрос не удался после ${MAX_ATTEMPTS} попыток`)
+}
+
 // ─── Препроцессинг ответа ────────────────────────────────────────────────────
 
 /**
@@ -259,33 +326,8 @@ function validateCallAnalysis(data: unknown, rawContent: string, transcript: str
 export async function analyseTranscript(transcript: string): Promise<CallAnalysis> {
   const { apiKey, model } = getConfig()
 
-  // ── 1. HTTP-запрос ──────────────────────────────────────────────────────────
-  let res: Response
-  try {
-    res = await fetch(`${BOTHUB_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: transcript },
-        ],
-        temperature: 0,
-      }),
-    })
-  } catch (err) {
-    throw new Error(
-      `BotHub: сетевая ошибка — ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-
-  if (!res.ok) {
-    throw new Error(`BotHub: HTTP ${res.status} ${res.statusText}`)
-  }
+  // ── 1. HTTP-запрос (до 3 попыток при network / 429 / 500 / 502 / 503 / 504) ───────
+  const res = await fetchChatCompletion(apiKey, model, transcript)
 
   // ── 2. Парсинг HTTP-тела ────────────────────────────────────────────────────
   let body: unknown

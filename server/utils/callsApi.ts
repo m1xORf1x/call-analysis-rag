@@ -3,7 +3,8 @@
  * server/utils/callsApi.ts
  *
  * Клиент внешнего Calls API.
- * Используется из scripts/pipeline.ts и (позже) из Nitro API-эндпоинтов.
+ * Используется scripts/pipeline.ts, scripts/exportCalls.ts и diagnostic scripts (check-*).
+ * Nitro GET /api/calls читает data/calls.export.json через server/utils/callsSnapshot.ts.
  *
  * Контракт API:
  *   GET /v1/health          → { ok: true }
@@ -56,6 +57,62 @@ function getConfig(): CallsApiConfig {
   return { baseUrl, token }
 }
 
+// ─── HTTP retry ──────────────────────────────────────────────────────────────
+
+const MAX_ATTEMPTS = 3
+const RETRY_DELAYS_MS = [500, 1000] as const
+
+class CallsApiHttpError extends Error {
+  override readonly name = 'CallsApiHttpError'
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isRetryableHttpStatus(status: number): boolean {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+}
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  formatHttpError: (status: number, statusText: string) => string,
+  formatNetworkError: (err: unknown) => string,
+): Promise<Response> {
+  let lastError: Error | undefined
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, init)
+
+      if (res.ok) return res
+
+      const httpError = new CallsApiHttpError(formatHttpError(res.status, res.statusText))
+      if (isRetryableHttpStatus(res.status) && attempt < MAX_ATTEMPTS) {
+        lastError = httpError
+        await sleep(RETRY_DELAYS_MS[attempt - 1]!)
+        continue
+      }
+      throw httpError
+    } catch (err) {
+      if (err instanceof CallsApiHttpError) {
+        throw err
+      }
+
+      const networkError = new Error(formatNetworkError(err))
+      if (attempt < MAX_ATTEMPTS) {
+        lastError = networkError
+        await sleep(RETRY_DELAYS_MS[attempt - 1]!)
+        continue
+      }
+      throw networkError
+    }
+  }
+
+  throw lastError ?? new Error('Calls API: request failed after 3 attempts')
+}
+
 // ─── Health check ──────────────────────────────────────────────────────────
 
 /**
@@ -89,20 +146,12 @@ export async function checkHealth(): Promise<boolean> {
 export async function fetchCalls(): Promise<Call[]> {
   const { baseUrl, token } = getConfig()
 
-  let res: Response
-  try {
-    res = await fetch(`${baseUrl}/v1/calls`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-  } catch (err) {
-    throw new Error(
-      `/v1/calls: network error — ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-
-  if (!res.ok) {
-    throw new Error(`/v1/calls: HTTP ${res.status} ${res.statusText}`)
-  }
+  const res = await fetchWithRetry(
+    `${baseUrl}/v1/calls`,
+    { headers: { Authorization: `Bearer ${token}` } },
+    (status, statusText) => `/v1/calls: HTTP ${status} ${statusText}`,
+    (err) => `/v1/calls: network error — ${err instanceof Error ? err.message : String(err)}`,
+  )
 
   let body: unknown
   try {
@@ -168,23 +217,17 @@ export async function downloadAudio(call: Call): Promise<Uint8Array> {
   const { baseUrl, token } = getConfig()
   const url = `${baseUrl}/v1/calls/${encodeURIComponent(call.id)}/audio`
 
-  let res: Response
-  try {
-    res = await fetch(url, {
+  const res = await fetchWithRetry(
+    url,
+    {
       headers: { Authorization: `Bearer ${token}` },
       redirect: 'follow', // 200 body и 302 → file оба работают прозрачно
-    })
-  } catch (err) {
-    throw new Error(
+    },
+    (status, statusText) =>
+      `Call ${call.id}: audio download failed — HTTP ${status} ${statusText}`,
+    (err) =>
       `Call ${call.id}: network error while downloading audio — ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-
-  if (!res.ok) {
-    throw new Error(
-      `Call ${call.id}: audio download failed — HTTP ${res.status} ${res.statusText}`,
-    )
-  }
+  )
 
   let buffer: ArrayBuffer
   try {

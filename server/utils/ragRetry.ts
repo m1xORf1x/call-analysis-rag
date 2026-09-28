@@ -6,7 +6,7 @@
  */
 
 const DEFAULT_MAX_ATTEMPTS = 3
-const DEFAULT_DELAYS_MS = [300, 700]
+const DEFAULT_DELAYS_MS = [500, 1000]
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))

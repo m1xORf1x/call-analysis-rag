@@ -35,7 +35,7 @@ import { parseAndChunkAll } from '../server/utils/ragChunk'
 import { batchEmbedTexts, EMBED_BATCH_SIZE } from '../server/utils/ragEmbed'
 import { recreateCollection, ensurePayloadIndexes, upsertPoints, countPoints } from '../server/utils/ragStore'
 
-const DOCS_PATH = './data/docs'
+const DOCS_PATH = process.env.DOCS_PATH?.trim() || './data/docs'
 
 // ─── Утилиты ─────────────────────────────────────────────────────────────────
 

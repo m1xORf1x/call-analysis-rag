@@ -108,7 +108,8 @@ async function main(): Promise<void> {
   console.log('╚══════════════════════════════════════════════════════════════╝')
   console.log()
   console.log(`  Оценка токенов: ~${CHARS_PER_TOKEN} символа/токен (приближение для кириллицы)`)
-  console.log(`  Цель: 400–800 токенов/chunk,  overlap: ~75 токенов (PDF, XLSX, DOCX)`)
+  console.log(`  Цель: 400–800 токенов/chunk`)
+  console.log(`  Overlap: ~75 токенов для DOCX и разбитых крупных XLSX-листов; PDF/PPTX — без overlap`)
   console.log()
 
   const allChunks = await parseAndChunkAll(DOCS_PATH)

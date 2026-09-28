@@ -28,7 +28,8 @@
  *     и отбрасывается. НЕТ fallback на safeExcerpt/весь chunk: LLM не может
  *     получить citation только потому, что указала существующий chunk id.
  *
- * Не реализует: POST /ask endpoint, UI.
+ * Не содержит HTTP-слой и UI: POST /api/ask реализован в server/api/ask.post.ts,
+ * POST /ask — alias в server/routes/ask.post.ts.
  */
 
 import type { Citation, AnswerResult, Project } from '../../types/index'

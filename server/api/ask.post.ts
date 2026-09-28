@@ -17,6 +17,7 @@
  */
 
 import { answerQuestion } from '../utils/ragAnswer'
+import { detectProject } from '../utils/ragProject'
 import type { AskRequest, AskResponse } from '../../types/index'
 
 export default defineEventHandler(async (event): Promise<AskResponse> => {
@@ -59,7 +60,8 @@ export default defineEventHandler(async (event): Promise<AskResponse> => {
 
   // ── 3. Pipeline: retrieval → LLM → citations ───────────────────────────────
   try {
-    const result = await answerQuestion(trimmedQuestion)
+    const project = detectProject(trimmedQuestion)
+    const result = await answerQuestion(trimmedQuestion, { project })
 
     // Возвращаем только публичный контракт; score, chunkIndex и пр. не раскрываем
     return {

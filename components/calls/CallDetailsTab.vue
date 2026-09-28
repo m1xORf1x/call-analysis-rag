@@ -74,13 +74,13 @@ const interestColor = computed(() => {
           3 cols × 308px = 924, gap 8px × 2 = 16 → total 940 ✓
           3 rows × 73px = 219, gap 8px × 2 = 16 → total 235 ✓
         UNRESOLVED: точные метки полей — не читаются из collapsed instances.
-        Используем поля CallRecord (пометка в отчёте).
+        Используем поля CallDetailResponse / CallAnalysis (GET /api/calls/:id).
       -->
       <div class="fields-grid">
         <!-- Row 1: общая информация о звонке -->
         <div class="field">
           <span class="field-label">Тип звонка</span>
-          <!-- UNRESOLVED: CallRecord не содержит direction (in/out) -->
+          <!-- UNRESOLVED: CallDetailResponse не содержит direction (in/out) -->
           <span class="field-value">—</span>
         </div>
         <div class="field">
@@ -190,7 +190,7 @@ const interestColor = computed(() => {
             </div>
           </div>
         </div>
-        <!-- chart (1:36232): clientTalkPct из CommunicationRow -->
+        <!-- chart (1:36232): placeholder «Нет данных» (CallDetailResponse без talk %) -->
         <div class="cm-chart">
           <svg viewBox="0 0 187 187" fill="none" aria-hidden="true">
             <circle cx="93.5" cy="93.5" :r="DONUT_R" stroke="var(--c-border)" stroke-width="18" fill="none"/>
@@ -208,7 +208,7 @@ const interestColor = computed(() => {
           </div>
           <div class="cm-fields">
             <div class="cm-field">
-              <!-- UNRESOLVED: CallRecord не содержит manager name -->
+              <!-- UNRESOLVED: CallDetailResponse не содержит manager name -->
               <span class="field-label">Имя менеджера</span>
               <span class="field-value">—</span>
             </div>

@@ -50,8 +50,9 @@ export interface CallAnalysis {
 }
 
 /**
- * Полная запись звонка, хранимая в нашей БД.
- * Расширяет Call полями пайплайна.
+ * Концептуальная полная запись звонка с полями пайплайна.
+ * SQLite (server/utils/db.ts) хранит status, transcript, analysis_json, error;
+ * created_at / updated_at в таблице calls отсутствуют.
  */
 export interface CallRecord extends Call {
   status: CallStatus

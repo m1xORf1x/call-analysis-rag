@@ -19,6 +19,7 @@
  */
 
 import { resolveAnswer, parseStrictLlmJson, NO_ANSWER_TEXT } from '../server/utils/ragAnswer'
+import { detectProject } from '../server/utils/ragProject'
 import type { RetrievedChunk } from '../types/index'
 
 function makeChunk(overrides: Partial<RetrievedChunk> & { text: string; source: string }): RetrievedChunk {
@@ -144,6 +145,25 @@ function main(): void {
     check('5b. отсутствует "answer" → весь ответ malformed (usedChunks: [])', llmResultB.usedChunks.length === 0)
     const resultB = resolveAnswer('Какая ставка?', chunks, llmResultB)
     check('5b. финальный answer === NO_ANSWER_TEXT', resultB.answer === NO_ANSWER_TEXT)
+  }
+  console.log()
+
+  // ── Тест 6: detectProject — русские склонения «Бестселлер» ───────────────────
+  console.log('Тест 6: detectProject — Бестселлер / склонения / Bestseller')
+  {
+    const bestsellerQuestions = [
+      'парковка ЖК Бестселлер',
+      'парковка в Бестселлере',
+      'условия Бестселлера',
+      'расскажи про Бестселлер',
+      'Bestseller parking',
+    ]
+    for (const q of bestsellerQuestions) {
+      check(`«${q}» → bestseller`, detectProject(q) === 'bestseller')
+    }
+    check('Алиса → alisa', detectProject('Где находится ЖК Алиса?') === 'alisa')
+    check('без проекта → undefined', detectProject('Какая ставка по семейной ипотеке?') === undefined)
+    check('оба проекта → undefined', detectProject('Сравни Алису и Бестселлер') === undefined)
   }
   console.log()
 

@@ -17,7 +17,8 @@
  * Путь к файлу БД: env DB_PATH (по умолчанию ./data/calls.db).
  * Директория для файла создаётся автоматически, если её нет.
  *
- * Статус: только слой доступа к БД. К pipeline пока не подключён.
+ * Используется scripts/pipeline.ts, scripts/exportCalls.ts и scripts/reanalyzeCalls.ts
+ * (getCall, createCall, updateCallStatus и др.).
  */
 
 import { DatabaseSync } from 'node:sqlite'
