@@ -16,7 +16,7 @@ import type { CallDetailResponse, CallsListResponse } from '~/types/callsApi'
 import type { CommunicationRow } from '~/data/mockCommunications'
 import CallDetailPopup from '~/components/calls/CallDetailPopup.vue'
 
-useHead({ title: 'Коммуникации — Bestseller AI' })
+useHead({ title: 'Коммуникации — Call Analysis RAG' })
 
 const {
   data: callsResponse,
@@ -252,14 +252,6 @@ const filterChips = [
       <div class="table-area">
         <div class="count-row">
           <span class="count-text">Найдено коммуникаций: <strong>{{ displayedRows.length }}</strong></span>
-          <!--
-            ИЗВЕСТНЫЙ ПРОБЕЛ (подтверждён повторно через get_metadata на 1:35926):
-            между текстом счётчика и группой действий в Figma есть ещё 2 ButtonSecondary
-            (65px и 159px, gap 8px, перед кнопкой "Сбросить" 113px) — их текст/иконки
-            не удалось получить: get_design_context на 1:35926 уперся в месячный лимит
-            Figma MCP (Starter/View = 20 вызовов/мес, исчерпан). Инстансы в metadata не
-            разворачивают текстовые дочерние узлы, поэтому не придумываю их содержимое.
-          -->
           <div class="count-actions">
             <button class="btn-reset-sm">
               Сбросить

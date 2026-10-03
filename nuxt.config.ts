@@ -11,7 +11,7 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Bestseller AI — Коммуникации',
+      title: 'Call Analysis RAG — Коммуникации',
       link: [
         {
           rel: 'preconnect',
