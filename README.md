@@ -8,8 +8,9 @@
 
 **Live:** [https://call-analysis-rag.vercel.app](https://call-analysis-rag.vercel.app)
 
-- UI работает на сохранённом snapshot обработанных тестовых звонков.
-- RAG использует Qdrant и LLM API.
+- UI со списком звонков и сохранёнными результатами анализа работает на snapshot и доступен в live demo. Calls API, STT и LLM для просмотра не нужны.
+- RAG-модуль реализован: embeddings → Qdrant → LLM.
+- Live RAG требует действующих credentials внешних сервисов и поэтому может быть недоступен в публичной demo.
 - Для запуска полного pipeline локально требуется доступ к используемым внешним API и соответствующие credentials.
 
 ## Что реализовано
@@ -88,6 +89,6 @@ npm run ingest        # documents → Qdrant
 ## Deployment / ограничения
 
 - `pipeline` и `ingest` запускаются локально.
-- UI на Vercel читает tracked snapshot `data/calls.export.json`.
-- RAG на Vercel обращается к Qdrant и LLM live.
+- UI на Vercel читает tracked snapshot `data/calls.export.json`, поэтому просмотр звонков и сохранённых результатов анализа не зависит от Calls API, STT или LLM.
+- RAG endpoint (`POST /ask`) реализован, но live-ответ зависит от доступности Qdrant, embeddings API и LLM API. Публичная demo не гарантирует постоянную доступность внешних API.
 - Секреты задаются environment variables (Vercel: Project Settings) и не хранятся в Git.
